@@ -28,12 +28,7 @@
     #hud input[type="range"] { padding: 0; height: 18px; }
     #hud button { cursor:pointer; }
     #hud button:hover { background: rgba(255,255,255,.10); }
-    #help {
-      margin-top: 8px;
-      font-size: 12px;
-      line-height: 1.35;
-      opacity:.92;
-    }
+    #help { margin-top: 8px; font-size: 12px; line-height: 1.35; opacity:.92; }
     #help details summary { cursor:pointer; }
     #readout {
       margin-top: 10px;
@@ -50,8 +45,6 @@
       background: rgba(255,255,255,.06);
       font-size: 11px; margin-right: 6px;
     }
-
-    /* Etichette corpi celesti */
     .label {
       position: fixed; z-index: 9;
       transform: translate(-50%, -50%);
@@ -65,7 +58,6 @@
       border: 1px solid rgba(255,255,255,.10);
       white-space: nowrap;
     }
-
     #footerTip {
       position: fixed; bottom: 10px; left: 12px; z-index: 10;
       color: rgba(255,255,255,.82);
@@ -86,6 +78,18 @@
       background: rgba(255,255,255,.08);
       color: #f1f1f1;
     }
+    #errBox {
+      margin-top: 10px;
+      display:none;
+      background: rgba(255,80,80,.12);
+      border: 1px solid rgba(255,80,80,.35);
+      color: rgba(255,230,230,.95);
+      border-radius: 12px;
+      padding: 10px;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    #errBox code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; }
   </style>
 </head>
 
@@ -147,6 +151,8 @@
       <div id="extraFacts" style="margin-top:8px; opacity:.95;"></div>
     </div>
 
+    <div id="errBox"></div>
+
     <div id="help">
       <details>
         <summary>Controlli (clicca)</summary>
@@ -162,572 +168,432 @@
   </div>
 
   <div id="footerTip">
-    Suggerimento: attiva <kbd>Distanze realistiche</kbd> per capire quanto la Luna “è lontana” rispetto alla Terra, e <kbd>Dimensioni realistiche</kbd> per vedere quanto i pianeti diventano piccoli a scala vera.
+    Suggerimento: attiva <kbd>Distanze realistiche</kbd> e <kbd>Dimensioni realistiche</kbd> per capire le scale reali (diventa tutto “piccolo” e lontano!).
   </div>
 
   <div id="labels"></div>
 
   <script type="module">
-    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
-    import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
-
-    // -----------------------------
-    // Dati reali (km, giorni)
-    // -----------------------------
-    const KM = 1;
-    const AU_KM = 149_597_870 * KM;
-
-    const bodiesData = {
-      sun:   { name: "Sole",  radiusKm: 696_340,  color: 0xffcc55 },
-      earth: { name: "Terra", radiusKm: 6_371,    color: 0x3d7cff, orbitKm: AU_KM,        periodDays: 365.256 },
-      moon:  { name: "Luna",  radiusKm: 1_737.4,  color: 0xd9d9d9, orbitKm: 384_400,      periodDays: 27.3217, parent: "earth" },
-      mars:  { name: "Marte", radiusKm: 3_389.5,  color: 0xff6a3d, orbitKm: 1.523679*AU_KM, periodDays: 686.971 }
-    };
-
-    // Scala di default (comoda per “giocare”)
-    // 1 unità = 1.000.000 km per le distanze
-    const DIST_SCALE_DEFAULT = 1_000_000;
-    // dimensioni “esagerate” per vederle bene
-    const SIZE_SCALE_DEFAULT = 2200;
-
-    let distReal = false;
-    let sizeReal = false;
-
-    function distScale() { return distReal ? DIST_SCALE_DEFAULT : DIST_SCALE_DEFAULT; }
-    function sizeScale() { return sizeReal ? 1 : SIZE_SCALE_DEFAULT; }
-
-    // -----------------------------
-    // Setup scena
-    // -----------------------------
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000000);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    document.body.appendChild(renderer.domElement);
-
-    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.01, 5000);
-    camera.position.set(0, 80, 180);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.06;
-    controls.minDistance = 1;
-    controls.maxDistance = 2000;
-
-    // Luci: “sole” come sorgente forte + ambient soft
-    const ambient = new THREE.AmbientLight(0xffffff, 0.10);
-    scene.add(ambient);
-
-    const sunLight = new THREE.PointLight(0xffffff, 3.0, 0, 2);
-    sunLight.position.set(0,0,0);
-    scene.add(sunLight);
-
-    // “Stelle” (semplice, leggero)
-    const starsGeo = new THREE.BufferGeometry();
-    const starCount = 2500;
-    const starPos = new Float32Array(starCount * 3);
-    for (let i=0; i<starCount; i++){
-      const r = 1800 * Math.cbrt(Math.random());
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2*Math.random()-1);
-      starPos[i*3+0] = r * Math.sin(phi) * Math.cos(theta);
-      starPos[i*3+1] = r * Math.cos(phi);
-      starPos[i*3+2] = r * Math.sin(phi) * Math.sin(theta);
-    }
-    starsGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
-    const stars = new THREE.Points(starsGeo, new THREE.PointsMaterial({ size: 1.2, sizeAttenuation: true, color: 0xffffff }));
-    scene.add(stars);
-
-    // -----------------------------
-    // Creazione corpi
-    // -----------------------------
-    const bodies = {}; // mesh
-    const pivots = {}; // pivot per orbite
-    const labels = {};
-
-    const labelsRoot = document.getElementById("labels");
-
-    function makeLabel(key, text) {
-      const div = document.createElement("div");
-      div.className = "label";
-      div.textContent = text;
-      labelsRoot.appendChild(div);
-      labels[key] = div;
+    const errBox = document.getElementById("errBox");
+    function showErr(msg, err){
+      errBox.style.display = "block";
+      errBox.innerHTML =
+        `<b>⚠️ Errore: il 3D non si è avviato.</b><br>
+         ${msg}<br><br>
+         <span style="opacity:.9">Dettagli:</span><br>
+         <code>${(err && (err.stack || err.message)) ? (err.stack || err.message) : "n/d"}</code><br><br>
+         <b>Soluzioni rapide:</b>
+         <ul style="margin:6px 0 0 18px; padding:0;">
+           <li>Disattiva eventuali AdBlock/Firewall che bloccano CDN.</li>
+           <li>Riprova con un altro browser (Chrome/Edge).</li>
+           <li>Se la rete blocca i CDN: ti preparo la versione “offline” con librerie dentro la repo.</li>
+         </ul>`;
     }
 
-    function makePlanetMaterial(baseColor, glossy=false){
-      // Materiale semplice ma “credibile” (specular per Terra)
-      return new THREE.MeshStandardMaterial({
-        color: baseColor,
-        roughness: glossy ? 0.55 : 0.9,
-        metalness: 0.0
-      });
-    }
+    (async () => {
+      try {
+        // CDN più affidabile
+        const THREE = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js");
+        const { OrbitControls } = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js");
 
-    function makeAtmosphere(radius){
-      const geo = new THREE.SphereGeometry(radius * 1.03, 64, 64);
-      const mat = new THREE.MeshBasicMaterial({
-        color: 0x66aaff,
-        transparent: true,
-        opacity: 0.12,
-        blending: THREE.AdditiveBlending,
-        side: THREE.BackSide
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      return mesh;
-    }
+        // -----------------------------
+        // Dati reali (km, giorni)
+        // -----------------------------
+        const KM = 1;
+        const AU_KM = 149_597_870 * KM;
 
-    function makeBody(key){
-      const d = bodiesData[key];
-      const radiusUnits = (d.radiusKm / distScale()) * sizeScale(); // radius in scene units
-      const geo = new THREE.SphereGeometry(Math.max(radiusUnits, 0.15), 64, 64);
+        const bodiesData = {
+          sun:   { name: "Sole",  radiusKm: 696_340,  color: 0xffcc55 },
+          earth: { name: "Terra", radiusKm: 6_371,    color: 0x3d7cff, orbitKm: AU_KM,           periodDays: 365.256 },
+          moon:  { name: "Luna",  radiusKm: 1_737.4,  color: 0xd9d9d9, orbitKm: 384_400,         periodDays: 27.3217, parent: "earth" },
+          mars:  { name: "Marte", radiusKm: 3_389.5,  color: 0xff6a3d, orbitKm: 1.523679*AU_KM,  periodDays: 686.971 }
+        };
 
-      let mat;
-      if (key === "sun"){
-        mat = new THREE.MeshBasicMaterial({ color: d.color });
-      } else if (key === "earth"){
-        mat = makePlanetMaterial(d.color, true);
-      } else {
-        mat = makePlanetMaterial(d.color, false);
-      }
+        // Scala comoda: 1 unità = 1.000.000 km per distanze
+        const DIST_SCALE_DEFAULT = 1_000_000;
+        // dimensioni “esagerate” per vederle bene
+        const SIZE_SCALE_DEFAULT = 2200;
 
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.name = key;
-      mesh.userData.radiusUnits = radiusUnits;
+        let distReal = false;
+        let sizeReal = false;
 
-      // Piccolo “glow” sul Sole
-      if (key === "sun"){
-        const glowGeo = new THREE.SphereGeometry(Math.max(radiusUnits, 1.0) * 1.08, 64, 64);
-        const glowMat = new THREE.MeshBasicMaterial({ color: 0xffdd88, transparent: true, opacity: 0.25 });
-        const glow = new THREE.Mesh(glowGeo, glowMat);
-        mesh.add(glow);
-      }
+        function distScale() { return DIST_SCALE_DEFAULT; }
+        function sizeScale() { return sizeReal ? 1 : SIZE_SCALE_DEFAULT; }
 
-      // Atmosfera sulla Terra
-      if (key === "earth"){
-        mesh.add(makeAtmosphere(Math.max(radiusUnits, 0.15)));
-        // “Nuvole” (layer leggero)
-        const cloudGeo = new THREE.SphereGeometry(Math.max(radiusUnits, 0.15) * 1.01, 64, 64);
-        const cloudMat = new THREE.MeshStandardMaterial({
-          color: 0xffffff,
-          transparent: true,
-          opacity: 0.10,
-          roughness: 1.0,
-          metalness: 0.0
+        // -----------------------------
+        // Setup scena
+        // -----------------------------
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.01, 5000);
+        camera.position.set(0, 80, 180);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.minDistance = 1;
+        controls.maxDistance = 2000;
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.10);
+        scene.add(ambient);
+
+        const sunLight = new THREE.PointLight(0xffffff, 3.0, 0, 2);
+        sunLight.position.set(0,0,0);
+        scene.add(sunLight);
+
+        // Stelle
+        const starsGeo = new THREE.BufferGeometry();
+        const starCount = 2500;
+        const starPos = new Float32Array(starCount * 3);
+        for (let i=0; i<starCount; i++){
+          const r = 1800 * Math.cbrt(Math.random());
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2*Math.random()-1);
+          starPos[i*3+0] = r * Math.sin(phi) * Math.cos(theta);
+          starPos[i*3+1] = r * Math.cos(phi);
+          starPos[i*3+2] = r * Math.sin(phi) * Math.sin(theta);
+        }
+        starsGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+        const stars = new THREE.Points(
+          starsGeo,
+          new THREE.PointsMaterial({ size: 1.2, sizeAttenuation: true, color: 0xffffff })
+        );
+        scene.add(stars);
+
+        // -----------------------------
+        // Creazione corpi
+        // -----------------------------
+        const bodies = {};
+        const pivots = {};
+        const labels = {};
+        const labelsRoot = document.getElementById("labels");
+
+        function makeLabel(key, text) {
+          const div = document.createElement("div");
+          div.className = "label";
+          div.textContent = text;
+          labelsRoot.appendChild(div);
+          labels[key] = div;
+        }
+
+        function makePlanetMaterial(baseColor, glossy=false){
+          return new THREE.MeshStandardMaterial({
+            color: baseColor,
+            roughness: glossy ? 0.55 : 0.9,
+            metalness: 0.0
+          });
+        }
+
+        function makeAtmosphere(radius){
+          const geo = new THREE.SphereGeometry(radius * 1.03, 64, 64);
+          const mat = new THREE.MeshBasicMaterial({
+            color: 0x66aaff,
+            transparent: true,
+            opacity: 0.12,
+            blending: THREE.AdditiveBlending,
+            side: THREE.BackSide
+          });
+          return new THREE.Mesh(geo, mat);
+        }
+
+        function makeBody(key){
+          const d = bodiesData[key];
+          const radiusUnits = (d.radiusKm / distScale()) * sizeScale();
+          const geo = new THREE.SphereGeometry(Math.max(radiusUnits, 0.15), 64, 64);
+
+          let mat;
+          if (key === "sun"){
+            mat = new THREE.MeshBasicMaterial({ color: d.color });
+          } else if (key === "earth"){
+            mat = makePlanetMaterial(d.color, true);
+          } else {
+            mat = makePlanetMaterial(d.color, false);
+          }
+
+          const mesh = new THREE.Mesh(geo, mat);
+          mesh.name = key;
+          mesh.userData.radiusUnits = radiusUnits;
+
+          if (key === "sun"){
+            const glowGeo = new THREE.SphereGeometry(Math.max(radiusUnits, 1.0) * 1.08, 64, 64);
+            const glowMat = new THREE.MeshBasicMaterial({ color: 0xffdd88, transparent: true, opacity: 0.25 });
+            mesh.add(new THREE.Mesh(glowGeo, glowMat));
+          }
+
+          if (key === "earth"){
+            mesh.add(makeAtmosphere(Math.max(radiusUnits, 0.15)));
+            const cloudGeo = new THREE.SphereGeometry(Math.max(radiusUnits, 0.15) * 1.01, 64, 64);
+            const cloudMat = new THREE.MeshStandardMaterial({
+              color: 0xffffff, transparent: true, opacity: 0.10, roughness: 1.0, metalness: 0.0
+            });
+            const clouds = new THREE.Mesh(cloudGeo, cloudMat);
+            clouds.userData.isClouds = true;
+            mesh.add(clouds);
+          }
+          return mesh;
+        }
+
+        function makeOrbitPivot(key){
+          const pivot = new THREE.Object3D();
+          pivot.name = key + "_pivot";
+          return pivot;
+        }
+
+        const orbitLines = {};
+        function makeOrbitLine(radiusUnits, color=0x334455){
+          const segments = 256;
+          const pts = [];
+          for (let i=0; i<=segments; i++){
+            const a = (i/segments) * Math.PI * 2;
+            pts.push(new THREE.Vector3(Math.cos(a)*radiusUnits, 0, Math.sin(a)*radiusUnits));
+          }
+          const geo = new THREE.BufferGeometry().setFromPoints(pts);
+          const mat = new THREE.LineBasicMaterial({ color, transparent:true, opacity: 0.6 });
+          return new THREE.Line(geo, mat);
+        }
+
+        bodies.sun = makeBody("sun");
+        scene.add(bodies.sun);
+        makeLabel("sun", "Sole");
+
+        ["earth","mars"].forEach(key => {
+          const p = makeOrbitPivot(key);
+          pivots[key] = p;
+          scene.add(p);
+
+          bodies[key] = makeBody(key);
+          p.add(bodies[key]);
+
+          const rUnits = (bodiesData[key].orbitKm / distScale());
+          bodies[key].position.set(rUnits, 0, 0);
+
+          makeLabel(key, bodiesData[key].name);
+
+          orbitLines[key] = makeOrbitLine(rUnits, key==="earth" ? 0x2a4d8f : 0x6b2f22);
+          scene.add(orbitLines[key]);
         });
-        const clouds = new THREE.Mesh(cloudGeo, cloudMat);
-        clouds.userData.isClouds = true;
-        mesh.add(clouds);
+
+        pivots.moon = makeOrbitPivot("moon");
+        bodies.earth.add(pivots.moon);
+
+        bodies.moon = makeBody("moon");
+        pivots.moon.add(bodies.moon);
+
+        const moonRUnits = (bodiesData.moon.orbitKm / distScale());
+        bodies.moon.position.set(moonRUnits, 0, 0);
+
+        makeLabel("moon", "Luna");
+        orbitLines.moon = makeOrbitLine(moonRUnits, 0x777777);
+        bodies.earth.add(orbitLines.moon);
+
+        // Vettori
+        const vectorLines = {
+          earth: new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(), 12, 0x66ccff),
+          mars:  new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(), 10, 0xff8866),
+          moon:  new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(), 6,  0xdddddd)
+        };
+        scene.add(vectorLines.earth, vectorLines.mars, vectorLines.moon);
+
+        function updateVectors(){
+          const ePos = bodies.earth.getWorldPosition(new THREE.Vector3());
+          const mPos = bodies.mars.getWorldPosition(new THREE.Vector3());
+          const moonPos = bodies.moon.getWorldPosition(new THREE.Vector3());
+          const earthCenter = new THREE.Vector3(0,0,0);
+          const marsCenter  = new THREE.Vector3(0,0,0);
+          const moonCenter  = bodies.earth.getWorldPosition(new THREE.Vector3());
+
+          function tangentialDir(pos, center){
+            const r = pos.clone().sub(center);
+            return new THREE.Vector3(-r.z, 0, r.x).normalize();
+          }
+
+          vectorLines.earth.position.copy(ePos);
+          vectorLines.earth.setDirection(tangentialDir(ePos, earthCenter));
+          vectorLines.earth.setLength(14, 3, 2);
+
+          vectorLines.mars.position.copy(mPos);
+          vectorLines.mars.setDirection(tangentialDir(mPos, marsCenter));
+          vectorLines.mars.setLength(12, 3, 2);
+
+          vectorLines.moon.position.copy(moonPos);
+          vectorLines.moon.setDirection(tangentialDir(moonPos, moonCenter));
+          vectorLines.moon.setLength(7, 2, 1.5);
+        }
+
+        // Misuratore
+        let measureFrom = "earth";
+        let measureTo = "moon";
+
+        const measureMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+        const measureGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+        const measureLineObj = new THREE.Line(measureGeo, measureMat);
+        scene.add(measureLineObj);
+
+        const measureLineText = document.getElementById("measureLine");
+        const extraFacts = document.getElementById("extraFacts");
+
+        function kmDistance(aKey, bKey){
+          const a = bodies[aKey].getWorldPosition(new THREE.Vector3());
+          const b = bodies[bKey].getWorldPosition(new THREE.Vector3());
+          const distUnits = a.distanceTo(b);
+          const km = distUnits * distScale();
+          return { km, distUnits };
+        }
+        function fmtKm(km){
+          if (km >= 1e9) return (km/1e9).toFixed(3) + " miliardi km";
+          if (km >= 1e6) return (km/1e6).toFixed(3) + " milioni km";
+          return Math.round(km).toLocaleString("it-IT") + " km";
+        }
+        function updateMeasure(){
+          const a = bodies[measureFrom].getWorldPosition(new THREE.Vector3());
+          const b = bodies[measureTo].getWorldPosition(new THREE.Vector3());
+          measureGeo.setFromPoints([a, b]);
+
+          const { km } = kmDistance(measureFrom, measureTo);
+          measureLineText.innerHTML =
+            `<b>Distanza</b> ${bodiesData[measureFrom].name} → ${bodiesData[measureTo].name}: <b>${fmtKm(km)}</b>`;
+
+          const earthMoon = kmDistance("earth","moon").km;
+          const earthMars = kmDistance("earth","mars").km;
+          const earthDiamKm = bodiesData.earth.radiusKm * 2;
+          const moonDiamKm  = bodiesData.moon.radiusKm * 2;
+
+          extraFacts.innerHTML = `
+            <div>• Orbite qui semplificate (circolari). Nella realtà sono ellittiche e perturbate.</div>
+            <div>• <b>Diametro Terra</b> ≈ ${fmtKm(earthDiamKm)} · <b>Diametro Luna</b> ≈ ${fmtKm(moonDiamKm)}.</div>
+            <div>• <b>Terra–Luna</b> ≈ ${fmtKm(earthMoon)} · <b>Terra–Marte</b> (istantanea) ≈ ${fmtKm(earthMars)}.</div>
+            <div style="margin-top:6px; opacity:.9;">Idea chiave: orbita = “cadere” mentre si va abbastanza veloce in direzione tangenziale.</div>
+          `;
+        }
+
+        // UI
+        const focusSelect = document.getElementById("focusSelect");
+        const resetBtn = document.getElementById("resetBtn");
+        const pauseChk = document.getElementById("pauseChk");
+        const timeRange = document.getElementById("timeRange");
+        const timeTag = document.getElementById("timeTag");
+        const vectorsChk = document.getElementById("vectorsChk");
+        const orbitsChk = document.getElementById("orbitsChk");
+        const fromSelect = document.getElementById("fromSelect");
+        const toSelect = document.getElementById("toSelect");
+
+        fromSelect.addEventListener("change", () => { measureFrom = fromSelect.value; updateMeasure(); });
+        toSelect.addEventListener("change", () => { measureTo = toSelect.value; updateMeasure(); });
+
+        timeRange.addEventListener("input", () => { timeTag.textContent = "x" + timeRange.value; });
+
+        vectorsChk.addEventListener("change", () => {
+          const v = vectorsChk.checked;
+          vectorLines.earth.visible = v; vectorLines.mars.visible = v; vectorLines.moon.visible = v;
+        });
+        orbitsChk.addEventListener("change", () => {
+          const v = orbitsChk.checked;
+          Object.values(orbitLines).forEach(l => l.visible = v);
+        });
+
+        function focusOn(key){
+          const target = bodies[key].getWorldPosition(new THREE.Vector3());
+          controls.target.copy(target);
+          const radius = bodies[key].userData.radiusUnits ?? 5;
+          const offset = new THREE.Vector3(1.2, 0.8, 1.4).normalize().multiplyScalar(Math.max(radius*6, 40));
+          camera.position.copy(target.clone().add(offset));
+          controls.update();
+        }
+
+        focusSelect.addEventListener("change", () => focusOn(focusSelect.value));
+        resetBtn.addEventListener("click", () => {
+          pauseChk.checked = false;
+          timeRange.value = 35;
+          timeTag.textContent = "x35";
+          simTimeDays = 0;
+          focusSelect.value = "earth";
+          focusOn("earth");
+        });
+
+        window.addEventListener("keydown", (e) => {
+          if (e.code === "Space") pauseChk.checked = !pauseChk.checked;
+          if (e.key === "1"){ focusSelect.value="sun"; focusOn("sun"); }
+          if (e.key === "2"){ focusSelect.value="earth"; focusOn("earth"); }
+          if (e.key === "3"){ focusSelect.value="moon"; focusOn("moon"); }
+          if (e.key === "4"){ focusSelect.value="mars"; focusOn("mars"); }
+        });
+
+        // Simulazione
+        let simTimeDays = 0;
+        const clock = new THREE.Clock();
+
+        function updateOrbits(dtDays){
+          const earthAng = (simTimeDays / bodiesData.earth.periodDays) * Math.PI * 2;
+          pivots.earth.rotation.y = earthAng;
+
+          const marsAng = (simTimeDays / bodiesData.mars.periodDays) * Math.PI * 2;
+          pivots.mars.rotation.y  = marsAng * 0.98;
+
+          const moonAng = (simTimeDays / bodiesData.moon.periodDays) * Math.PI * 2;
+          pivots.moon.rotation.y  = moonAng * 1.02;
+
+          bodies.earth.rotation.y += dtDays * (Math.PI * 2);
+          bodies.mars.rotation.y  += dtDays * (Math.PI * 2) * (1/1.03);
+          const clouds = bodies.earth.children.find(c => c.userData?.isClouds);
+          if (clouds) clouds.rotation.y += dtDays * (Math.PI * 2) * 0.35;
+        }
+
+        // Etichette 2D
+        const tmpV = new THREE.Vector3();
+        function updateLabels(){
+          const w = window.innerWidth, h = window.innerHeight;
+          for (const key of ["sun","earth","moon","mars"]){
+            const div = labels[key];
+            if (!div) continue;
+            const pos = bodies[key].getWorldPosition(tmpV);
+            const projected = pos.clone().project(camera);
+            const x = (projected.x * 0.5 + 0.5) * w;
+            const y = (-projected.y * 0.5 + 0.5) * h;
+            div.style.display = projected.z > 1 ? "none" : "block";
+            div.style.left = x + "px";
+            div.style.top  = y + "px";
+          }
+        }
+
+        window.addEventListener("resize", () => {
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start
+        focusOn("earth");
+        updateMeasure();
+
+        function animate(){
+          requestAnimationFrame(animate);
+          const dt = clock.getDelta();
+          controls.update();
+
+          if (!pauseChk.checked){
+            const speed = Number(timeRange.value);
+            const dtDays = (dt * speed) * 0.2;
+            simTimeDays += dtDays;
+            updateOrbits(dtDays);
+          }
+
+          updateVectors();
+          updateMeasure();
+          updateLabels();
+          renderer.render(scene, camera);
+        }
+        animate();
+
+      } catch (e) {
+        showErr("Non riesco a caricare Three.js / OrbitControls dalla rete.", e);
       }
-
-      return mesh;
-    }
-
-    // Pivots orbite
-    function makeOrbitPivot(key){
-      const pivot = new THREE.Object3D();
-      pivot.name = key + "_pivot";
-      return pivot;
-    }
-
-    // Orbits lines (circolari)
-    const orbitLines = {};
-
-    function makeOrbitLine(radiusUnits, color=0x334455){
-      const segments = 256;
-      const pts = [];
-      for (let i=0; i<=segments; i++){
-        const a = (i/segments) * Math.PI * 2;
-        pts.push(new THREE.Vector3(Math.cos(a)*radiusUnits, 0, Math.sin(a)*radiusUnits));
-      }
-      const geo = new THREE.BufferGeometry().setFromPoints(pts);
-      const mat = new THREE.LineBasicMaterial({ color, transparent:true, opacity: 0.6 });
-      return new THREE.Line(geo, mat);
-    }
-
-    // Crea Sole
-    bodies.sun = makeBody("sun");
-    scene.add(bodies.sun);
-    makeLabel("sun", "Sole");
-
-    // Crea Terra e Marte con pivot intorno al Sole
-    ["earth","mars"].forEach(key => {
-      const p = makeOrbitPivot(key);
-      pivots[key] = p;
-      scene.add(p);
-
-      bodies[key] = makeBody(key);
-      p.add(bodies[key]);
-
-      // posizionamento iniziale
-      const rUnits = (bodiesData[key].orbitKm / distScale());
-      bodies[key].position.set(rUnits, 0, 0);
-
-      makeLabel(key, bodiesData[key].name);
-
-      orbitLines[key] = makeOrbitLine(rUnits, key==="earth" ? 0x2a4d8f : 0x6b2f22);
-      scene.add(orbitLines[key]);
-    });
-
-    // Luna con pivot attaccato alla Terra
-    pivots.moon = makeOrbitPivot("moon");
-    bodies.earth.add(pivots.moon);
-
-    bodies.moon = makeBody("moon");
-    pivots.moon.add(bodies.moon);
-
-    const moonRUnits = (bodiesData.moon.orbitKm / distScale());
-    bodies.moon.position.set(moonRUnits, 0, 0);
-
-    makeLabel("moon", "Luna");
-    orbitLines.moon = makeOrbitLine(moonRUnits, 0x777777);
-    bodies.earth.add(orbitLines.moon);
-
-    // -----------------------------
-    // Vettori (velocità tangenziale “didattica”)
-    // -----------------------------
-    const vectorLines = {
-      earth: new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(), 12, 0x66ccff),
-      mars:  new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(), 10, 0xff8866),
-      moon:  new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(), 6,  0xdddddd)
-    };
-    scene.add(vectorLines.earth);
-    scene.add(vectorLines.mars);
-    scene.add(vectorLines.moon);
-
-    function updateVectors(){
-      // Direzione tangenziale: per orbita nel piano XZ, tangente = rotazione di 90° del raggio
-      const ePos = bodies.earth.getWorldPosition(new THREE.Vector3());
-      const mPos = bodies.mars.getWorldPosition(new THREE.Vector3());
-      const moonPos = bodies.moon.getWorldPosition(new THREE.Vector3());
-      const earthCenter = new THREE.Vector3(0,0,0);
-      const marsCenter  = new THREE.Vector3(0,0,0);
-      const moonCenter  = bodies.earth.getWorldPosition(new THREE.Vector3());
-
-      function tangentialDir(pos, center){
-        const r = pos.clone().sub(center);
-        const t = new THREE.Vector3(-r.z, 0, r.x).normalize();
-        return t;
-      }
-
-      // lunghezze indicative (non fisicamente scalate)
-      vectorLines.earth.position.copy(ePos);
-      vectorLines.earth.setDirection(tangentialDir(ePos, earthCenter));
-      vectorLines.earth.setLength(14, 3, 2);
-
-      vectorLines.mars.position.copy(mPos);
-      vectorLines.mars.setDirection(tangentialDir(mPos, marsCenter));
-      vectorLines.mars.setLength(12, 3, 2);
-
-      vectorLines.moon.position.copy(moonPos);
-      vectorLines.moon.setDirection(tangentialDir(moonPos, moonCenter));
-      vectorLines.moon.setLength(7, 2, 1.5);
-    }
-
-    // -----------------------------
-    // Misuratore distanza (linea + testo)
-    // -----------------------------
-    let measureFrom = "earth";
-    let measureTo = "moon";
-
-    const measureMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
-    const measureGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-    const measureLineObj = new THREE.Line(measureGeo, measureMat);
-    scene.add(measureLineObj);
-
-    const measureLineText = document.getElementById("measureLine");
-    const extraFacts = document.getElementById("extraFacts");
-
-    function kmDistance(aKey, bKey){
-      const a = bodies[aKey].getWorldPosition(new THREE.Vector3());
-      const b = bodies[bKey].getWorldPosition(new THREE.Vector3());
-      const distUnits = a.distanceTo(b);
-      const km = distUnits * distScale(); // perché 1 unit = distScale km
-      return { km, distUnits };
-    }
-
-    function fmtKm(km){
-      if (km >= 1e9) return (km/1e9).toFixed(3) + " miliardi km";
-      if (km >= 1e6) return (km/1e6).toFixed(3) + " milioni km";
-      return Math.round(km).toLocaleString("it-IT") + " km";
-    }
-
-    function updateMeasure(){
-      const a = bodies[measureFrom].getWorldPosition(new THREE.Vector3());
-      const b = bodies[measureTo].getWorldPosition(new THREE.Vector3());
-      measureGeo.setFromPoints([a, b]);
-
-      const { km } = kmDistance(measureFrom, measureTo);
-      measureLineText.innerHTML =
-        `<b>Distanza</b> ${bodiesData[measureFrom].name} → ${bodiesData[measureTo].name}: <b>${fmtKm(km)}</b>`;
-
-      // pillole didattiche rapide (meccanica orbitale + scale)
-      const earthMoon = kmDistance("earth","moon").km;
-      const earthMars = kmDistance("earth","mars").km;
-
-      const earthDiamKm = bodiesData.earth.radiusKm * 2;
-      const moonDiamKm  = bodiesData.moon.radiusKm * 2;
-
-      extraFacts.innerHTML = `
-        <div>• La Luna orbita attorno alla Terra: qui la traiettoria è mostrata come cerchio (nella realtà è ellittica e “perturbata”).</div>
-        <div>• Confronto scale: <b>Diametro Terra</b> ≈ ${fmtKm(earthDiamKm)} · <b>Diametro Luna</b> ≈ ${fmtKm(moonDiamKm)}.</div>
-        <div>• Distanze: <b>Terra–Luna</b> ≈ ${fmtKm(earthMoon)} · <b>Terra–Marte</b> (qui istantanea) ≈ ${fmtKm(earthMars)}.</div>
-        <div style="margin-top:6px; opacity:.9;">
-          Idea chiave: un’orbita è un “cadere continuamente” mentre si va abbastanza veloce in direzione tangenziale.
-        </div>
-      `;
-    }
-
-    // -----------------------------
-    // UI
-    // -----------------------------
-    const focusSelect = document.getElementById("focusSelect");
-    const resetBtn = document.getElementById("resetBtn");
-    const pauseChk = document.getElementById("pauseChk");
-    const timeRange = document.getElementById("timeRange");
-    const timeTag = document.getElementById("timeTag");
-    const distRealChk = document.getElementById("distRealChk");
-    const sizeRealChk = document.getElementById("sizeRealChk");
-    const vectorsChk = document.getElementById("vectorsChk");
-    const orbitsChk = document.getElementById("orbitsChk");
-    const fromSelect = document.getElementById("fromSelect");
-    const toSelect = document.getElementById("toSelect");
-
-    function focusOn(key){
-      const target = bodies[key].getWorldPosition(new THREE.Vector3());
-      controls.target.copy(target);
-
-      // Metti la camera a una distanza “comoda” in base al raggio
-      const radius = bodies[key].userData.radiusUnits ?? 5;
-      const offset = new THREE.Vector3(1.2, 0.8, 1.4).normalize().multiplyScalar(Math.max(radius*6, 40));
-      camera.position.copy(target.clone().add(offset));
-      controls.update();
-    }
-
-    function rebuildScales(){
-      // Ricostruisci geometrie dimensioni in base ai toggle scale
-      // (semplice: rimuoviamo e ricreiamo le mesh)
-      const oldFocus = focusSelect.value;
-
-      // Salva posizioni angolari correnti dai pivot (rotazioni)
-      const earthRot = pivots.earth.rotation.y;
-      const marsRot  = pivots.mars.rotation.y;
-      const moonRot  = pivots.moon.rotation.y;
-
-      // Rimuovi tutto tranne stelle e luci
-      ["sun","earth","mars","moon"].forEach(k => {
-        if (labels[k]) labels[k].remove();
-      });
-      labelsRoot.innerHTML = "";
-
-      Object.values(orbitLines).forEach(l => l.remove());
-      Object.keys(orbitLines).forEach(k => delete orbitLines[k]);
-
-      scene.remove(measureLineObj);
-      scene.remove(vectorLines.earth); scene.remove(vectorLines.mars); scene.remove(vectorLines.moon);
-
-      // Pulisci pivots e bodies
-      Object.values(pivots).forEach(p => p.removeFromParent());
-      Object.values(bodies).forEach(m => m.removeFromParent());
-      for (const k of Object.keys(pivots)) delete pivots[k];
-      for (const k of Object.keys(bodies)) delete bodies[k];
-
-      // Ricrea
-      bodies.sun = makeBody("sun");
-      scene.add(bodies.sun);
-      makeLabel("sun", "Sole");
-
-      ["earth","mars"].forEach(key => {
-        const p = makeOrbitPivot(key);
-        pivots[key] = p;
-        scene.add(p);
-
-        bodies[key] = makeBody(key);
-        p.add(bodies[key]);
-
-        const rUnits = (bodiesData[key].orbitKm / distScale());
-        bodies[key].position.set(rUnits, 0, 0);
-
-        makeLabel(key, bodiesData[key].name);
-
-        orbitLines[key] = makeOrbitLine(rUnits, key==="earth" ? 0x2a4d8f : 0x6b2f22);
-        scene.add(orbitLines[key]);
-      });
-
-      pivots.moon = makeOrbitPivot("moon");
-      bodies.earth.add(pivots.moon);
-
-      bodies.moon = makeBody("moon");
-      pivots.moon.add(bodies.moon);
-
-      const moonRUnits2 = (bodiesData.moon.orbitKm / distScale());
-      bodies.moon.position.set(moonRUnits2, 0, 0);
-
-      makeLabel("moon", "Luna");
-      orbitLines.moon = makeOrbitLine(moonRUnits2, 0x777777);
-      bodies.earth.add(orbitLines.moon);
-
-      // Ripristina rotazioni orbitali
-      pivots.earth.rotation.y = earthRot;
-      pivots.mars.rotation.y  = marsRot;
-      pivots.moon.rotation.y  = moonRot;
-
-      // Re-add misuratore e vettori
-      scene.add(measureLineObj);
-      scene.add(vectorLines.earth);
-      scene.add(vectorLines.mars);
-      scene.add(vectorLines.moon);
-
-      // Toggle visibilità
-      Object.values(orbitLines).forEach(l => l.visible = orbitsChk.checked);
-      vectorLines.earth.visible = vectorsChk.checked;
-      vectorLines.mars.visible  = vectorsChk.checked;
-      vectorLines.moon.visible  = vectorsChk.checked;
-
-      focusOn(oldFocus);
-      updateMeasure();
-    }
-
-    focusSelect.addEventListener("change", () => focusOn(focusSelect.value));
-    resetBtn.addEventListener("click", () => {
-      pauseChk.checked = false;
-      timeRange.value = 35;
-      timeTag.textContent = "x35";
-      simTimeDays = 0;
-      focusSelect.value = "earth";
-      focusOn("earth");
-    });
-
-    fromSelect.addEventListener("change", () => { measureFrom = fromSelect.value; updateMeasure(); });
-    toSelect.addEventListener("change", () => { measureTo = toSelect.value; updateMeasure(); });
-
-    timeRange.addEventListener("input", () => {
-      timeTag.textContent = "x" + timeRange.value;
-    });
-
-    distRealChk.addEventListener("change", () => {
-      // Nota: in questo prototipo distReal non cambia il DIST_SCALE (rimane coerente),
-      // ma il checkbox è utile per “modalità didattica”: potresti collegarlo a scale più estreme.
-      distReal = distRealChk.checked;
-      rebuildScales();
-    });
-
-    sizeRealChk.addEventListener("change", () => {
-      sizeReal = sizeRealChk.checked;
-      rebuildScales();
-    });
-
-    vectorsChk.addEventListener("change", () => {
-      vectorLines.earth.visible = vectorsChk.checked;
-      vectorLines.mars.visible  = vectorsChk.checked;
-      vectorLines.moon.visible  = vectorsChk.checked;
-    });
-
-    orbitsChk.addEventListener("change", () => {
-      Object.values(orbitLines).forEach(l => l.visible = orbitsChk.checked);
-    });
-
-    // Tasti rapidi
-    window.addEventListener("keydown", (e) => {
-      if (e.code === "Space"){
-        pauseChk.checked = !pauseChk.checked;
-      }
-      if (e.key === "1"){ focusSelect.value="sun"; focusOn("sun"); }
-      if (e.key === "2"){ focusSelect.value="earth"; focusOn("earth"); }
-      if (e.key === "3"){ focusSelect.value="moon"; focusOn("moon"); }
-      if (e.key === "4"){ focusSelect.value="mars"; focusOn("mars"); }
-    });
-
-    // -----------------------------
-    // Simulazione: orbite (semplificate)
-    // -----------------------------
-    let simTimeDays = 0;
-    const clock = new THREE.Clock();
-
-    function updateOrbits(dtDays){
-      // Angolo = 2π * t / periodo
-      // Terra intorno al Sole
-      const earthAng = (simTimeDays / bodiesData.earth.periodDays) * Math.PI * 2;
-      pivots.earth.rotation.y = earthAng;
-
-      // Marte intorno al Sole
-      const marsAng = (simTimeDays / bodiesData.mars.periodDays) * Math.PI * 2;
-      pivots.mars.rotation.y = marsAng * 0.98; // piccola differenza per “variare” la scena
-
-      // Luna intorno alla Terra
-      const moonAng = (simTimeDays / bodiesData.moon.periodDays) * Math.PI * 2;
-      pivots.moon.rotation.y = moonAng * 1.02;
-
-      // Rotazioni proprie (giorno/notte)
-      bodies.earth.rotation.y += dtDays * (Math.PI * 2) * (1/1.0); // ~1 giro al giorno
-      bodies.mars.rotation.y  += dtDays * (Math.PI * 2) * (1/1.03);
-      // Nuvole terra più lente
-      const clouds = bodies.earth.children.find(c => c.userData?.isClouds);
-      if (clouds) clouds.rotation.y += dtDays * (Math.PI * 2) * 0.35;
-    }
-
-    // -----------------------------
-    // Etichette 2D (proiezione)
-    // -----------------------------
-    const tmpV = new THREE.Vector3();
-    function updateLabels(){
-      const w = window.innerWidth, h = window.innerHeight;
-
-      for (const key of ["sun","earth","moon","mars"]){
-        const div = labels[key];
-        if (!div) continue;
-
-        const pos = bodies[key].getWorldPosition(tmpV);
-        const projected = pos.clone().project(camera);
-
-        const x = (projected.x * 0.5 + 0.5) * w;
-        const y = (-projected.y * 0.5 + 0.5) * h;
-
-        // Nascondi se dietro la camera
-        div.style.display = projected.z > 1 ? "none" : "block";
-        div.style.left = x + "px";
-        div.style.top  = y + "px";
-      }
-    }
-
-    // -----------------------------
-    // Resize
-    // -----------------------------
-    window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    // Avvio: focus Terra
-    focusOn("earth");
-    updateMeasure();
-
-    // -----------------------------
-    // Render loop
-    // -----------------------------
-    function animate(){
-      requestAnimationFrame(animate);
-
-      const dt = clock.getDelta();
-      controls.update();
-
-      if (!pauseChk.checked){
-        const speed = Number(timeRange.value); // “x”
-        const dtDays = (dt * speed) * 0.2;     // fattore per rendere piacevole la velocità
-        simTimeDays += dtDays;
-        updateOrbits(dtDays);
-      }
-
-      updateVectors();
-      updateMeasure();
-      updateLabels();
-
-      renderer.render(scene, camera);
-    }
-    animate();
+    })();
   </script>
 </body>
 </html>
