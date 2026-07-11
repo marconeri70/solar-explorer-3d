@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#030712" />
-  <meta name="description" content="Esploratore 3D interattivo di Terra, Luna e Marte con interfaccia a scomparsa, orbite e missioni d’azione." />
+  <meta name="description" content="Esploratore 3D di Terra, Luna e Marte con missioni d’azione controllabili interamente con il mouse." />
   <title>Esploratore del Sistema Solare 3D</title>
 
   <!--
@@ -346,11 +346,18 @@
     .action-stat span { display:block; color:var(--muted); font-size:9px; text-transform:uppercase; letter-spacing:.08em; }
     .action-stat strong { display:block; margin-top:2px; font-size:15px; }
 
-    #crosshair { position:absolute; left:50%; top:50%; width:32px; height:32px; transform:translate(-50%,-50%); opacity:.82; }
+    #crosshair {
+      position:absolute; left:50%; top:50%; width:32px; height:32px;
+      transform:translate(-50%,-50%); opacity:.88; pointer-events:none;
+      will-change:left,top,transform; transition:filter .12s ease, opacity .12s ease;
+    }
     #crosshair::before, #crosshair::after { content:''; position:absolute; background:#a5f3fc; box-shadow:0 0 8px #22d3ee; }
     #crosshair::before { width:32px; height:1px; top:15px; left:0; }
     #crosshair::after { width:1px; height:32px; left:15px; top:0; }
     #crosshair i { position:absolute; inset:8px; border:1px solid rgba(165,243,252,.8); border-radius:50%; }
+    #crosshair.locked { filter:drop-shadow(0 0 7px #fb7185); transform:translate(-50%,-50%) scale(1.16); }
+    #crosshair.locked::before, #crosshair.locked::after { background:#fda4af; box-shadow:0 0 10px #fb7185; }
+    #crosshair.locked i { border-color:#fda4af; }
 
     #radarWrap { position:absolute; right:16px; bottom:16px; width:178px; padding:9px; border-radius:18px; pointer-events:none; }
     #radarWrap .radar-title { display:flex; justify-content:space-between; color:#bae6fd; font-size:10px; margin-bottom:5px; }
@@ -383,7 +390,7 @@
     .flight-btn[data-control="boost"]{grid-area:boost}.flight-btn[data-control="fire"]{grid-area:fire}.flight-btn[data-control="warp"]{grid-area:warp}.flight-btn[data-control="brake"]{grid-area:brake}
 
     body.action-active #hud, body.action-active #infoPanel, body.action-active #topbar, body.action-active #labelsLayer, body.action-active .panel-tab { display:none !important; }
-    body.action-active canvas { cursor:crosshair; }
+    body.action-active canvas { cursor:none; }
 
     @media (max-width: 760px) {
       #actionTop { top:8px; grid-template-columns:1fr auto; gap:8px; border-radius:15px; }
@@ -443,6 +450,7 @@
       <div class="action-stats">
         <div class="action-stat"><span>Punti</span><strong id="actionScore">0</strong></div>
         <div class="action-stat"><span>Tempo</span><strong id="actionTimer">03:00</strong></div>
+        <div class="action-stat"><span>Spinta</span><strong id="actionThrottle">45%</strong></div>
         <button id="warpBtn" class="small primary" type="button">⚡ Warp</button>
         <button id="exitActionBtn" class="small" type="button">✕</button>
       </div>
@@ -453,7 +461,10 @@
       <canvas id="radar" width="320" height="320"></canvas>
     </div>
     <div id="flightHelp" class="glass">
-      <strong>Comandi:</strong> <kbd>W</kbd> spinta · <kbd>S</kbd> freno · <kbd>A</kbd><kbd>D</kbd> imbardata · <kbd>↑</kbd><kbd>↓</kbd> beccheggio · <kbd>Q</kbd><kbd>E</kbd> rollio · <kbd>Shift</kbd> turbo · <kbd>Spazio</kbd> fuoco · <kbd>X</kbd> warp
+      <strong>Controllo completo con il mouse:</strong>
+      muovi il mouse per pilotare · <kbd>rotella</kbd> regola la spinta ·
+      <kbd>click sinistro</kbd> laser · <kbd>click destro</kbd> turbo ·
+      <kbd>click rotella</kbd> Warp
     </div>
     <div id="mobileFlight">
       <div class="mobile-cluster left">
@@ -935,6 +946,18 @@
         let laserCooldown = 0;
         let screenShake = 0;
 
+        const mouseFlight = {
+          x: 0,
+          y: 0,
+          throttle: .45,
+          hasPointer: false,
+          firing: false,
+          boosting: false
+        };
+        const actionPointer = new THREE.Vector2();
+        const actionRaycaster = new THREE.Raycaster();
+        const crosshair = document.getElementById('crosshair');
+
         const game = {
           active: false, score: 0, shield: 100, fuel: 100, timer: 180,
           objective: 0, collected: 0, destroyed: 0, speed: 0,
@@ -1065,14 +1088,23 @@
           particleBursts.push({points:pts,velocities,life:1,duration:.8});
         }
 
+        function getMouseAimDirection() {
+          const shipForward = new THREE.Vector3(0,0,-1).applyQuaternion(playerShip.quaternion).normalize();
+          if (!mouseFlight.hasPointer) return shipForward;
+          actionPointer.set(mouseFlight.x, -mouseFlight.y);
+          actionRaycaster.setFromCamera(actionPointer, camera);
+          const aimPoint = actionRaycaster.ray.origin.clone().addScaledVector(actionRaycaster.ray.direction, 110);
+          return aimPoint.sub(playerShip.position).normalize();
+        }
+
         function fireLaser() {
           if(!game.active || laserCooldown>0) return;
-          laserCooldown=.17; sfx('laser');
-          const forward=new THREE.Vector3(0,0,-1).applyQuaternion(playerShip.quaternion).normalize();
+          laserCooldown=.14; sfx('laser');
+          const direction=getMouseAimDirection();
           const mesh=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,2.2,8),new THREE.MeshBasicMaterial({color:0x67e8f9}));
-          mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),forward);
-          mesh.position.copy(playerShip.position).addScaledVector(forward,2.8);
-          scene.add(mesh); lasers.push({mesh,velocity:forward.multiplyScalar(74),life:2.4});
+          mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction);
+          mesh.position.copy(playerShip.position).addScaledVector(direction,2.8);
+          scene.add(mesh); lasers.push({mesh,velocity:direction.multiplyScalar(82),life:2.4});
         }
 
         function damagePlayer(amount) {
@@ -1095,7 +1127,9 @@
 
         function startAction() {
           ensureAudio(); stopTour();
-          game.active=true; game.score=0; game.shield=100; game.fuel=100; game.timer=180; game.objective=0; game.collected=0; game.destroyed=0; game.speed=0; game.invulnerable=0; game.warpCooldown=0; game.prevPaused=paused; game.prevLabels=labelsVisible; game.startTime=performance.now();
+          game.active=true; game.score=0; game.shield=100; game.fuel=100; game.timer=180; game.objective=0; game.collected=0; game.destroyed=0; game.speed=8; game.invulnerable=0; game.warpCooldown=0; game.prevPaused=paused; game.prevLabels=labelsVisible; game.startTime=performance.now();
+          mouseFlight.x=0; mouseFlight.y=0; mouseFlight.throttle=.45; mouseFlight.hasPointer=false; mouseFlight.firing=false; mouseFlight.boosting=false;
+          crosshair.style.left='50%'; crosshair.style.top='50%'; crosshair.classList.remove('locked');
           paused=true; labelsVisible=false;
           document.body.classList.add('action-active'); actionHud.classList.remove('hidden'); document.getElementById('missionResult').classList.add('hidden');
           document.getElementById('actionBtn').textContent='■ Missione in corso';
@@ -1106,7 +1140,7 @@
           playerShip.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),dir);
           controls.enabled=false;
           spawnActionField(); updateActionHud();
-          toast('🚀 Missione iniziata: raccogli 3 nuclei energetici');
+          toast('🖱️ Muovi il mouse per pilotare, rotella per la spinta, click sinistro per sparare');
         }
 
         function exitAction(showToast=true) {
@@ -1114,6 +1148,7 @@
           document.body.classList.remove('action-active'); actionHud.classList.add('hidden'); document.getElementById('missionResult').classList.add('hidden');
           document.getElementById('actionBtn').textContent='⚔️ Missione Azione';
           Object.keys(input).forEach(k=>input[k]=false);
+          mouseFlight.firing=false; mouseFlight.boosting=false; crosshair.classList.remove('locked');
           focusOn('earth',true); if(showToast)toast('Ritorno alla modalità esplorazione');
         }
 
@@ -1143,6 +1178,7 @@
           document.getElementById('shieldFill').style.width=`${game.shield}%`; document.getElementById('shieldValue').textContent=`${Math.round(game.shield)}%`;
           document.getElementById('fuelFill').style.width=`${game.fuel}%`; document.getElementById('fuelValue').textContent=`${Math.round(game.fuel)}%`;
           document.getElementById('actionScore').textContent=game.score.toLocaleString('it-IT');
+          document.getElementById('actionThrottle').textContent=`${Math.round(mouseFlight.throttle*100)}%`;
           const sec=Math.max(0,Math.ceil(game.timer)); document.getElementById('actionTimer').textContent=`${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
           document.getElementById('warpBtn').disabled=game.warpCooldown>0||game.fuel<25;
         }
@@ -1163,19 +1199,36 @@
           game.timer-=dt; laserCooldown=Math.max(0,laserCooldown-dt); game.invulnerable=Math.max(0,game.invulnerable-dt); game.warpCooldown=Math.max(0,game.warpCooldown-dt);
           if(game.timer<=0){finishAction(false,'Tempo esaurito');return;}
 
-          const turn=1.55*dt;
+          const deadZone=.055;
+          const steerX=Math.sign(mouseFlight.x)*Math.max(0,(Math.abs(mouseFlight.x)-deadZone)/(1-deadZone));
+          const steerY=Math.sign(mouseFlight.y)*Math.max(0,(Math.abs(mouseFlight.y)-deadZone)/(1-deadZone));
+          const turn=1.8*dt;
+          if(mouseFlight.hasPointer){
+            playerShip.rotateY(-steerX*turn);
+            playerShip.rotateX(-steerY*turn*.86);
+          }
           if(input.yawLeft)playerShip.rotateY(turn); if(input.yawRight)playerShip.rotateY(-turn);
           if(input.pitchUp)playerShip.rotateX(turn); if(input.pitchDown)playerShip.rotateX(-turn);
           if(input.rollLeft)playerShip.rotateZ(turn*1.25); if(input.rollRight)playerShip.rotateZ(-turn*1.25);
-          const boosting=input.boost&&game.fuel>0;
-          const thrust=input.forward?22:0; const brake=input.brake||input.reverse;
-          game.speed+=thrust*dt; if(brake)game.speed-=32*dt;
-          game.speed*=Math.pow(.985,dt*60); game.speed=THREE.MathUtils.clamp(game.speed,-5,boosting?37:20);
-          if(boosting&&game.speed>2){game.speed+=24*dt;game.fuel=Math.max(0,game.fuel-11*dt);} else game.fuel=Math.min(100,game.fuel+.8*dt);
+
+          if(input.forward)mouseFlight.throttle=Math.min(1,mouseFlight.throttle+.6*dt);
+          if(input.brake||input.reverse)mouseFlight.throttle=Math.max(0,mouseFlight.throttle-.9*dt);
+          const boosting=(input.boost||mouseFlight.boosting)&&game.fuel>0;
+          const targetSpeed=mouseFlight.throttle*20+(boosting?17:0);
+          game.speed=THREE.MathUtils.damp(game.speed,targetSpeed,boosting?3.8:2.35,dt);
+          game.speed=THREE.MathUtils.clamp(game.speed,0,37);
+          if(boosting&&game.speed>2)game.fuel=Math.max(0,game.fuel-11*dt);
+          else game.fuel=Math.min(100,game.fuel+.8*dt);
+
           const forward=new THREE.Vector3(0,0,-1).applyQuaternion(playerShip.quaternion).normalize();
           playerShip.position.addScaledVector(forward,game.speed*dt);
           playerShip.children.filter(c=>c.userData.engineGlow).forEach(g=>{const k=.75+Math.abs(game.speed)/18+(boosting?.9:0);g.scale.set(.9*k,2.5*k,1);});
-          if(input.fire)fireLaser(); if(input.warp){useWarp();input.warp=false;}
+          if(input.fire||mouseFlight.firing)fireLaser(); if(input.warp){useWarp();input.warp=false;}
+
+          actionPointer.set(mouseFlight.x,-mouseFlight.y);
+          actionRaycaster.setFromCamera(actionPointer,camera);
+          const lockHits=actionRaycaster.intersectObjects(asteroids.map(a=>a.mesh),false);
+          crosshair.classList.toggle('locked',lockHits.length>0);
 
           const desired=playerShip.position.clone().add(new THREE.Vector3(0,4.8,13.5).applyQuaternion(playerShip.quaternion));
           if(screenShake>0){screenShake=Math.max(0,screenShake-dt);desired.add(randomUnit().multiplyScalar(screenShake*.65));}
@@ -1541,14 +1594,62 @@
 
         const raycaster = new THREE.Raycaster();
         const pointer = new THREE.Vector2();
+
+        function updateMouseFlightPosition(event) {
+          mouseFlight.x = THREE.MathUtils.clamp(event.clientX / innerWidth * 2 - 1, -1, 1);
+          mouseFlight.y = THREE.MathUtils.clamp(event.clientY / innerHeight * 2 - 1, -1, 1);
+          mouseFlight.hasPointer = true;
+          crosshair.style.left = `${event.clientX}px`;
+          crosshair.style.top = `${event.clientY}px`;
+        }
+
+        renderer.domElement.addEventListener('pointermove', event => {
+          if (game.active && event.pointerType !== 'touch') updateMouseFlightPosition(event);
+        });
+
         renderer.domElement.addEventListener('pointerdown', event => {
-          if (game.active || event.button !== 0) return;
+          if (game.active) {
+            updateMouseFlightPosition(event);
+            event.preventDefault();
+            if (event.button === 0) {
+              mouseFlight.firing = true;
+              fireLaser();
+            } else if (event.button === 1) {
+              useWarp();
+            } else if (event.button === 2) {
+              mouseFlight.boosting = true;
+              if (mouseFlight.throttle < .3) mouseFlight.throttle = .3;
+            }
+            return;
+          }
+          if (event.button !== 0) return;
           pointer.x = event.clientX / innerWidth * 2 - 1;
           pointer.y = -(event.clientY / innerHeight) * 2 + 1;
           raycaster.setFromCamera(pointer, camera);
           const hits = raycaster.intersectObjects(Object.values(bodies).flatMap(b => [b.mesh, b.hitMesh]), true);
           const key = hits.find(hit => hit.object.userData.key)?.object.userData.key;
           if (key) focusOn(key);
+        });
+
+        window.addEventListener('pointerup', event => {
+          if (!game.active) return;
+          if (event.button === 0) mouseFlight.firing = false;
+          if (event.button === 2) mouseFlight.boosting = false;
+        });
+
+        renderer.domElement.addEventListener('wheel', event => {
+          if (!game.active) return;
+          event.preventDefault();
+          const step = event.deltaY < 0 ? .08 : -.08;
+          mouseFlight.throttle = THREE.MathUtils.clamp(mouseFlight.throttle + step, 0, 1);
+          updateActionHud();
+        }, { passive: false });
+
+        renderer.domElement.addEventListener('contextmenu', event => {
+          if (game.active) event.preventDefault();
+        });
+        renderer.domElement.addEventListener('auxclick', event => {
+          if (game.active) event.preventDefault();
         });
 
         document.getElementById('focusSelect').addEventListener('change', e => focusOn(e.target.value));
@@ -1646,7 +1747,11 @@
           }
         });
         window.addEventListener('keyup', event => { if (game.active) mapFlightKey(event, false); });
-        window.addEventListener('blur', () => Object.keys(input).forEach(k => input[k] = false));
+        window.addEventListener('blur', () => {
+          Object.keys(input).forEach(k => input[k] = false);
+          mouseFlight.firing = false;
+          mouseFlight.boosting = false;
+        });
 
         window.addEventListener('resize', () => {
           camera.aspect = innerWidth / innerHeight;
