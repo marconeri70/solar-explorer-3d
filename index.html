@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#030712" />
-  <meta name="description" content="Esploratore 3D interattivo di Terra, Luna e Marte, con orbite, distanze e missioni didattiche." />
+  <meta name="description" content="Esploratore 3D interattivo di Terra, Luna e Marte con interfaccia a scomparsa, orbite e missioni d’azione." />
   <title>Esploratore del Sistema Solare 3D</title>
 
   <!--
@@ -74,12 +74,14 @@
       z-index: 18;
       top: 66px;
       left: 12px;
-      width: min(390px, calc(100vw - 24px));
+      width: min(360px, calc(100vw - 24px));
       max-height: calc(100vh - 92px);
       overflow: auto;
       padding: 14px;
       border-radius: 20px;
       scrollbar-width: thin;
+      transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .22s ease;
+      will-change: transform, opacity;
     }
 
     #infoPanel {
@@ -87,12 +89,69 @@
       z-index: 17;
       top: 66px;
       right: 12px;
-      width: min(330px, calc(100vw - 24px));
+      width: min(310px, calc(100vw - 24px));
       max-height: calc(100vh - 92px);
       overflow: auto;
       padding: 16px;
       border-radius: 20px;
       scrollbar-width: thin;
+      transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .22s ease;
+      will-change: transform, opacity;
+    }
+
+    #hud.panel-hidden {
+      transform: translateX(calc(-100% - 28px));
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #infoPanel.panel-hidden {
+      transform: translateX(calc(100% + 28px));
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .panel-tab {
+      position: fixed;
+      z-index: 19;
+      top: 74px;
+      width: 42px;
+      height: 46px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      border-radius: 0 14px 14px 0;
+      border: 1px solid rgba(125, 211, 252, .34);
+      background: rgba(3, 10, 24, .68);
+      color: #e0f2fe;
+      box-shadow: 0 12px 34px rgba(0,0,0,.28);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      font-size: 18px;
+      opacity: .82;
+    }
+
+    .panel-tab:hover { opacity: 1; background: rgba(8, 23, 48, .92); }
+    #openHudBtn { left: 0; }
+    #openInfoBtn { right: 0; border-radius: 14px 0 0 14px; }
+    .panel-tab.is-hidden { display: none; }
+
+    .panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .icon-close {
+      flex: 0 0 auto;
+      width: 31px;
+      min-height: 31px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      color: #cbd5e1;
     }
 
     .section + .section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -231,20 +290,34 @@
     #mobilePanelBtn { display: none; }
 
     @media (max-width: 920px) {
-      #infoPanel { display: none; }
-      #hud { width: min(380px, calc(100vw - 24px)); }
-      #mobilePanelBtn { display: inline-flex; }
-      #infoPanel.mobile-open { display: block; top: auto; bottom: 12px; right: 12px; left: 12px; width: auto; max-height: 45vh; }
+      #hud { width: min(360px, calc(100vw - 24px)); }
+      #mobilePanelBtn { display: none; }
+      #infoPanel {
+        top: auto;
+        bottom: 12px;
+        right: 12px;
+        left: 12px;
+        width: auto;
+        max-height: 48vh;
+      }
+      #infoPanel.panel-hidden {
+        transform: translateY(calc(100% + 28px));
+      }
+      #openInfoBtn {
+        top: auto;
+        bottom: 18px;
+        right: 0;
+      }
     }
 
     @media (max-width: 560px) {
       #topbar { left: 10px; right: 10px; transform: none; min-width: 0; max-width: none; border-radius: 16px; }
       #topbar .subtitle { display: none; }
-      #hud { top: 64px; left: 8px; width: calc(100vw - 16px); max-height: 47vh; border-radius: 17px; }
-      #hud.compact { max-height: 52px; overflow: hidden; }
-      #hud.compact .section { display: none; }
-      #hud.compact .section:first-child { display: block; }
+      #hud { top: 64px; left: 8px; width: calc(100vw - 16px); max-height: 56vh; border-radius: 17px; }
+      #hud.panel-hidden { transform: translateX(calc(-100% - 18px)); }
       .stats { grid-template-columns: repeat(2, 1fr); }
+      .panel-tab { top: 76px; }
+      #openInfoBtn { top: auto; bottom: 18px; }
     }
 
 
@@ -309,7 +382,7 @@
     .flight-btn[data-control="pitchUp"]{grid-area:up}.flight-btn[data-control="yawLeft"]{grid-area:left}.flight-btn[data-control="pitchDown"]{grid-area:down}.flight-btn[data-control="yawRight"]{grid-area:right}
     .flight-btn[data-control="boost"]{grid-area:boost}.flight-btn[data-control="fire"]{grid-area:fire}.flight-btn[data-control="warp"]{grid-area:warp}.flight-btn[data-control="brake"]{grid-area:brake}
 
-    body.action-active #hud, body.action-active #infoPanel, body.action-active #topbar, body.action-active #labelsLayer { display:none !important; }
+    body.action-active #hud, body.action-active #infoPanel, body.action-active #topbar, body.action-active #labelsLayer, body.action-active .panel-tab { display:none !important; }
     body.action-active canvas { cursor:crosshair; }
 
     @media (max-width: 760px) {
@@ -413,13 +486,16 @@
   </div>
 
 
-  <aside id="hud" class="glass">
+  <button id="openHudBtn" class="panel-tab" type="button" title="Apri comandi" aria-label="Apri comandi">☰</button>
+  <button id="openInfoBtn" class="panel-tab" type="button" title="Apri informazioni" aria-label="Apri informazioni">ⓘ</button>
+
+  <aside id="hud" class="glass panel-hidden">
     <section class="section">
       <div class="section-title">
         <h2>Navigazione</h2>
         <div class="row">
           <button id="mobilePanelBtn" class="small" type="button">Info</button>
-          <button id="compactBtn" class="small" type="button" title="Riduci pannello">−</button>
+          <button id="compactBtn" class="icon-close" type="button" title="Nascondi comandi" aria-label="Nascondi comandi">×</button>
         </div>
       </div>
       <div class="row">
@@ -501,9 +577,14 @@
     </section>
   </aside>
 
-  <aside id="infoPanel" class="glass">
-    <div class="eyebrow">Corpo selezionato</div>
-    <h1 id="bodyName">Terra</h1>
+  <aside id="infoPanel" class="glass panel-hidden">
+    <div class="panel-head">
+      <div>
+        <div class="eyebrow">Corpo selezionato</div>
+        <h1 id="bodyName">Terra</h1>
+      </div>
+      <button id="closeInfoBtn" class="icon-close" type="button" title="Nascondi informazioni" aria-label="Nascondi informazioni">×</button>
+    </div>
     <p id="bodySummary"></p>
     <div id="bodyStats" class="stats"></div>
     <div id="lesson"></div>
@@ -1510,11 +1591,35 @@
         document.getElementById('fromSelect').addEventListener('change', updateMeasure);
         document.getElementById('toSelect').addEventListener('change', updateMeasure);
         document.getElementById('challengeBtn').addEventListener('click', () => challengeActive ? stopChallenge() : startChallenge());
-        document.getElementById('compactBtn').addEventListener('click', e => {
-          document.getElementById('hud').classList.toggle('compact');
-          e.currentTarget.textContent = document.getElementById('hud').classList.contains('compact') ? '+' : '−';
+        const hudPanel = document.getElementById('hud');
+        const infoPanel = document.getElementById('infoPanel');
+        const openHudBtn = document.getElementById('openHudBtn');
+        const openInfoBtn = document.getElementById('openInfoBtn');
+
+        function setPanelOpen(panel, open, trigger) {
+          panel.classList.toggle('panel-hidden', !open);
+          trigger.classList.toggle('is-hidden', open);
+          trigger.setAttribute('aria-expanded', String(open));
+        }
+
+        function closePanels() {
+          setPanelOpen(hudPanel, false, openHudBtn);
+          setPanelOpen(infoPanel, false, openInfoBtn);
+        }
+
+        openHudBtn.addEventListener('click', () => {
+          setPanelOpen(hudPanel, true, openHudBtn);
+          if (innerWidth < 720) setPanelOpen(infoPanel, false, openInfoBtn);
         });
-        document.getElementById('mobilePanelBtn').addEventListener('click', () => document.getElementById('infoPanel').classList.toggle('mobile-open'));
+        openInfoBtn.addEventListener('click', () => {
+          setPanelOpen(infoPanel, true, openInfoBtn);
+          if (innerWidth < 720) setPanelOpen(hudPanel, false, openHudBtn);
+        });
+        document.getElementById('compactBtn').addEventListener('click', () => setPanelOpen(hudPanel, false, openHudBtn));
+        document.getElementById('closeInfoBtn').addEventListener('click', () => setPanelOpen(infoPanel, false, openInfoBtn));
+
+        // Le schede partono nascoste per lasciare libera la visuale 3D.
+        closePanels();
 
         function mapFlightKey(event, down) {
           const map = { KeyW:'forward', KeyS:'brake', KeyA:'yawLeft', KeyD:'yawRight', ArrowUp:'pitchUp', ArrowDown:'pitchDown', KeyQ:'rollLeft', KeyE:'rollRight', ShiftLeft:'boost', ShiftRight:'boost', Space:'fire', KeyX:'warp' };
@@ -1531,6 +1636,14 @@
           if (event.key === '3') focusOn('moon');
           if (event.key === '4') focusOn('mars');
           if (event.key.toLowerCase() === 'r') document.getElementById('resetBtn').click();
+          if (event.key.toLowerCase() === 'h') {
+            const shouldOpen = hudPanel.classList.contains('panel-hidden') && infoPanel.classList.contains('panel-hidden');
+            if (shouldOpen) setPanelOpen(hudPanel, true, openHudBtn); else closePanels();
+          }
+          if (event.key.toLowerCase() === 'i') {
+            const open = infoPanel.classList.contains('panel-hidden');
+            setPanelOpen(infoPanel, open, openInfoBtn);
+          }
         });
         window.addEventListener('keyup', event => { if (game.active) mapFlightKey(event, false); });
         window.addEventListener('blur', () => Object.keys(input).forEach(k => input[k] = false));
