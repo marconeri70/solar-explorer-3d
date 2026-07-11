@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#030712" />
   <meta name="description" content="Esploratore 3D di Terra, Luna e Marte con missioni d’azione controllabili interamente con il mouse." />
-  <title>Esploratore del Sistema Solare 3D</title>
+  <title>Esploratore del Sistema Solare 3D — Pianeti realistici</title>
 
   <!--
     Import map: OrbitControls importa internamente il pacchetto "three".
@@ -754,9 +754,18 @@
         controls.maxDistance = 1600;
         controls.target.set(120, 0, 0);
 
-        scene.add(new THREE.AmbientLight(0x7296c7, 0.18));
-        const sunLight = new THREE.PointLight(0xfff2d0, 4.2, 0, 1.75);
+        scene.add(new THREE.AmbientLight(0x8aa8cf, 0.34));
+        scene.add(new THREE.HemisphereLight(0x8ecbff, 0x24130c, 0.38));
+
+        const sunLight = new THREE.PointLight(0xfff0c2, 5.3, 0, 1.7);
         scene.add(sunLight);
+
+        /* Luce molto lieve solidale con la telecamera:
+           mantiene leggibili pianeti e asteroidi anche sul lato in ombra. */
+        const cameraFillLight = new THREE.PointLight(0xa9d6ff, 0.78, 520, 1.7);
+        cameraFillLight.position.set(0, 0, 3);
+        camera.add(cameraFillLight);
+        scene.add(camera);
 
         function seededRandom(seed = 1) {
           let value = seed >>> 0;
@@ -773,54 +782,213 @@
           const ctx = canvas.getContext('2d');
           const rnd = seededRandom(seed);
 
-          const gradient = ctx.createLinearGradient(0, 0, 0, h);
-          if (kind === 'earth') {
-            gradient.addColorStop(0, '#123c72'); gradient.addColorStop(.5, '#176aa0'); gradient.addColorStop(1, '#0a315f');
-          } else if (kind === 'moon') {
-            gradient.addColorStop(0, '#d5d1c8'); gradient.addColorStop(.55, '#8f8c87'); gradient.addColorStop(1, '#57565a');
-          } else if (kind === 'mars') {
-            gradient.addColorStop(0, '#b95b31'); gradient.addColorStop(.55, '#7f2f1f'); gradient.addColorStop(1, '#35161a');
-          } else {
-            gradient.addColorStop(0, '#ffd05b'); gradient.addColorStop(.5, '#f59e0b'); gradient.addColorStop(1, '#9a3412');
-          }
-          ctx.fillStyle = gradient; ctx.fillRect(0, 0, w, h);
+          const blob = (cx, cy, rx, ry, color, rotation = 0, points = 22, alpha = 1) => {
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.translate(cx, cy);
+            ctx.rotate(rotation);
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            for (let i = 0; i < points; i++) {
+              const a = i / points * TWO_PI;
+              const wobble = .72 + rnd() * .38;
+              const x = Math.cos(a) * rx * wobble;
+              const y = Math.sin(a) * ry * wobble;
+              i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          };
+
+          const crater = (x, y, radius, darkness = .24) => {
+            const g = ctx.createRadialGradient(
+              x - radius * .28, y - radius * .24, radius * .08,
+              x, y, radius
+            );
+            g.addColorStop(0, `rgba(255,245,225,${darkness * .38})`);
+            g.addColorStop(.48, `rgba(30,25,25,${darkness})`);
+            g.addColorStop(.72, `rgba(18,16,18,${darkness * .62})`);
+            g.addColorStop(.84, `rgba(245,235,215,${darkness * .48})`);
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, TWO_PI);
+            ctx.fill();
+          };
 
           if (kind === 'earth') {
-            ctx.globalAlpha = .95;
-            const landColors = ['#638d50', '#8b9352', '#a67945', '#3f6d45'];
-            for (let i = 0; i < 115; i++) {
-              const x = rnd() * w, y = (0.12 + rnd() * .76) * h;
-              const rx = 18 + rnd() * 80, ry = 10 + rnd() * 42;
-              ctx.fillStyle = landColors[Math.floor(rnd() * landColors.length)];
+            const ocean = ctx.createLinearGradient(0, 0, 0, h);
+            ocean.addColorStop(0, '#0b2f62');
+            ocean.addColorStop(.18, '#0b5c98');
+            ocean.addColorStop(.52, '#0879b9');
+            ocean.addColorStop(.82, '#0a4b86');
+            ocean.addColorStop(1, '#071f49');
+            ctx.fillStyle = ocean;
+            ctx.fillRect(0, 0, w, h);
+
+            // Correnti e variazioni oceaniche.
+            ctx.save();
+            ctx.globalAlpha = .13;
+            ctx.strokeStyle = '#9bdcff';
+            ctx.lineWidth = 3;
+            for (let i = 0; i < 26; i++) {
+              const y = 45 + rnd() * (h - 90);
               ctx.beginPath();
-              for (let p = 0; p < 12; p++) {
-                const a = p / 12 * TWO_PI;
-                const wobble = .65 + rnd() * .5;
-                const px = x + Math.cos(a) * rx * wobble;
-                const py = y + Math.sin(a) * ry * wobble;
-                p ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
-              }
-              ctx.closePath(); ctx.fill();
+              ctx.moveTo(-40, y);
+              ctx.bezierCurveTo(w * .25, y + (rnd() - .5) * 55, w * .72, y + (rnd() - .5) * 75, w + 40, y + (rnd() - .5) * 45);
+              ctx.stroke();
             }
-            ctx.globalAlpha = .7;
-            ctx.fillStyle = '#eef8ff';
-            ctx.fillRect(0, 0, w, 15); ctx.fillRect(0, h - 17, w, 17);
+            ctx.restore();
+
+            // Masse continentali riconoscibili, senza usare immagini esterne.
+            blob(210, 185, 86, 108, '#4f7e43', -.30);
+            blob(260, 315, 52, 105, '#588545', -.08);
+            blob(500, 165, 92, 53, '#678a45', .08);
+            blob(560, 260, 67, 112, '#8b8146', -.12);
+            blob(695, 190, 145, 70, '#5f8142', .10);
+            blob(845, 335, 58, 40, '#8a7543', -.12);
+            blob(925, 250, 30, 25, '#477244', .20);
+            blob(335, 128, 42, 32, '#d7e4d3', -.12);
+
+            // Foreste, deserti e altopiani.
+            blob(218, 220, 55, 38, '#2f6c3d', -.25, 18, .68);
+            blob(275, 330, 30, 58, '#2d6a40', .15, 18, .70);
+            blob(560, 250, 52, 36, '#c39a57', -.05, 18, .78);
+            blob(660, 190, 72, 30, '#a58b4c', .05, 18, .55);
+            blob(820, 330, 39, 24, '#b38750', -.10, 18, .74);
+
+            // Ghiacci polari con bordi irregolari.
+            ctx.fillStyle = '#f4fbff';
+            ctx.globalAlpha = .94;
+            ctx.fillRect(0, 0, w, 13);
+            ctx.fillRect(0, h - 16, w, 16);
+            for (let i = 0; i < 34; i++) {
+              blob(rnd() * w, 14 + rnd() * 12, 18 + rnd() * 45, 4 + rnd() * 8, '#edf8ff', 0, 14, .65);
+              blob(rnd() * w, h - 14 - rnd() * 12, 18 + rnd() * 45, 4 + rnd() * 8, '#edf8ff', 0, 14, .65);
+            }
+            ctx.globalAlpha = 1;
+
+          } else if (kind === 'moon') {
+            const base = ctx.createLinearGradient(0, 0, 0, h);
+            base.addColorStop(0, '#d9d6ce');
+            base.addColorStop(.48, '#aaa8a2');
+            base.addColorStop(1, '#67686b');
+            ctx.fillStyle = base;
+            ctx.fillRect(0, 0, w, h);
+
+            // Mari lunari.
+            blob(350, 235, 120, 74, '#5e6266', -.14, 25, .55);
+            blob(510, 170, 82, 55, '#66696b', .22, 22, .50);
+            blob(670, 280, 105, 72, '#5d6063', -.12, 25, .48);
+            blob(820, 205, 67, 44, '#727477', .10, 22, .38);
+
+            for (let i = 0; i < 260; i++) {
+              crater(rnd() * w, rnd() * h, 3 + rnd() * 25, .10 + rnd() * .25);
+            }
+
+          } else if (kind === 'mars') {
+            const base = ctx.createLinearGradient(0, 0, 0, h);
+            base.addColorStop(0, '#d58452');
+            base.addColorStop(.28, '#bd5b33');
+            base.addColorStop(.62, '#9a3e27');
+            base.addColorStop(1, '#5a211d');
+            ctx.fillStyle = base;
+            ctx.fillRect(0, 0, w, h);
+
+            // Regioni basaltiche e grandi pianure.
+            blob(260, 205, 120, 58, '#65302b', -.18, 24, .58);
+            blob(510, 310, 175, 58, '#762c24', .08, 24, .52);
+            blob(755, 190, 135, 72, '#6f3028', -.14, 24, .48);
+            blob(870, 350, 100, 42, '#c77443', -.10, 22, .56);
+
+            // Valles Marineris.
+            ctx.save();
+            ctx.strokeStyle = 'rgba(61,20,18,.82)';
+            ctx.lineWidth = 13;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(345, 285);
+            ctx.bezierCurveTo(455, 300, 600, 270, 720, 292);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(238,150,93,.28)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.restore();
+
+            // Olympus Mons e crateri.
+            crater(235, 180, 34, .35);
+            for (let i = 0; i < 155; i++) {
+              crater(rnd() * w, rnd() * h, 2 + rnd() * 13, .05 + rnd() * .16);
+            }
+
+            // Calotte polari.
+            const north = ctx.createLinearGradient(0, 0, 0, 28);
+            north.addColorStop(0, 'rgba(250,247,235,.98)');
+            north.addColorStop(1, 'rgba(245,238,220,0)');
+            ctx.fillStyle = north;
+            ctx.fillRect(0, 0, w, 30);
+            const south = ctx.createLinearGradient(0, h, 0, h - 30);
+            south.addColorStop(0, 'rgba(250,247,235,.92)');
+            south.addColorStop(1, 'rgba(245,238,220,0)');
+            ctx.fillStyle = south;
+            ctx.fillRect(0, h - 30, w, 30);
+
           } else {
-            const count = kind === 'sun' ? 650 : 420;
-            for (let i = 0; i < count; i++) {
+            const base = ctx.createLinearGradient(0, 0, 0, h);
+            base.addColorStop(0, '#fff09a');
+            base.addColorStop(.25, '#ffd45a');
+            base.addColorStop(.55, '#ff9f1c');
+            base.addColorStop(1, '#d94a0b');
+            ctx.fillStyle = base;
+            ctx.fillRect(0, 0, w, h);
+
+            // Granulazione e bande convettive.
+            for (let i = 0; i < 900; i++) {
               const x = rnd() * w, y = rnd() * h;
-              const r = kind === 'sun' ? 1 + rnd() * 10 : 2 + rnd() * 20;
-              const alpha = .035 + rnd() * .16;
-              ctx.fillStyle = kind === 'moon' ? `rgba(30,30,35,${alpha})` : kind === 'mars' ? `rgba(35,12,10,${alpha})` : `rgba(255,245,180,${alpha})`;
-              ctx.beginPath(); ctx.arc(x, y, r, 0, TWO_PI); ctx.fill();
+              const r = 1 + rnd() * 9;
+              ctx.fillStyle = `rgba(255,${180 + Math.floor(rnd() * 70)},${55 + Math.floor(rnd() * 95)},${.045 + rnd() * .15})`;
+              ctx.beginPath();
+              ctx.arc(x, y, r, 0, TWO_PI);
+              ctx.fill();
             }
-            if (kind === 'mars') {
-              ctx.fillStyle = 'rgba(235,225,205,.75)'; ctx.fillRect(0, 0, w, 12);
+            ctx.save();
+            ctx.globalAlpha = .18;
+            ctx.strokeStyle = '#fff3b0';
+            for (let i = 0; i < 12; i++) {
+              const y = (i + .5) * h / 12;
+              ctx.lineWidth = 3 + rnd() * 7;
+              ctx.beginPath();
+              ctx.moveTo(0, y);
+              ctx.bezierCurveTo(w * .3, y + (rnd() - .5) * 18, w * .7, y + (rnd() - .5) * 22, w, y);
+              ctx.stroke();
+            }
+            ctx.restore();
+
+            // Macchie solari.
+            for (let i = 0; i < 18; i++) {
+              const x = rnd() * w, y = 60 + rnd() * (h - 120);
+              const r = 4 + rnd() * 16;
+              ctx.fillStyle = `rgba(104,38,10,${.28 + rnd() * .36})`;
+              ctx.beginPath();
+              ctx.ellipse(x, y, r * 1.8, r, rnd() * Math.PI, 0, TWO_PI);
+              ctx.fill();
             }
           }
+
+          // Grana finissima per evitare superfici piatte.
+          ctx.save();
+          ctx.globalAlpha = kind === 'sun' ? .08 : .055;
+          for (let i = 0; i < 3200; i++) {
+            const value = Math.floor(80 + rnd() * 170);
+            ctx.fillStyle = `rgb(${value},${value},${value})`;
+            ctx.fillRect(rnd() * w, rnd() * h, 1, 1);
+          }
+          ctx.restore();
 
           const texture = new THREE.CanvasTexture(canvas);
           texture.colorSpace = THREE.SRGBColorSpace;
+          texture.wrapS = THREE.RepeatWrapping;
           texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
           return texture;
         }
@@ -841,6 +1009,57 @@
           const t = new THREE.CanvasTexture(canvas);
           t.colorSpace = THREE.SRGBColorSpace;
           return t;
+        }
+
+        function asteroidTexture(seed = 1) {
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = 384;
+          const ctx = canvas.getContext('2d');
+          const rnd = seededRandom(seed);
+
+          const base = ctx.createRadialGradient(130, 105, 10, 192, 192, 260);
+          base.addColorStop(0, '#c4aa8c');
+          base.addColorStop(.42, '#8e725b');
+          base.addColorStop(1, '#4b3b32');
+          ctx.fillStyle = base;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          for (let i = 0; i < 210; i++) {
+            const x = rnd() * canvas.width;
+            const y = rnd() * canvas.height;
+            const r = 2 + rnd() * 18;
+            const g = ctx.createRadialGradient(x - r * .25, y - r * .25, 0, x, y, r);
+            g.addColorStop(0, `rgba(230,210,180,${.06 + rnd() * .14})`);
+            g.addColorStop(.55, `rgba(46,31,25,${.12 + rnd() * .22})`);
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, TWO_PI);
+            ctx.fill();
+          }
+
+          ctx.save();
+          ctx.strokeStyle = 'rgba(38,22,16,.34)';
+          ctx.lineWidth = 1.4;
+          for (let i = 0; i < 34; i++) {
+            let x = rnd() * canvas.width;
+            let y = rnd() * canvas.height;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            for (let p = 0; p < 5; p++) {
+              x += (rnd() - .5) * 34;
+              y += (rnd() - .5) * 34;
+              ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+          }
+          ctx.restore();
+
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+          texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+          return texture;
         }
 
         function glowTexture() {
@@ -892,6 +1111,12 @@
           moon: canvasTexture('moon', 33),
           mars: canvasTexture('mars', 45)
         };
+        const asteroidTextureMap = [
+          asteroidTexture(101),
+          asteroidTexture(202),
+          asteroidTexture(303),
+          asteroidTexture(404)
+        ];
 
         function makeBody(key) {
           const group = new THREE.Group();
@@ -905,7 +1130,16 @@
 
           const material = key === 'sun'
             ? new THREE.MeshBasicMaterial({ map: textureMap[key], color: 0xffffff })
-            : new THREE.MeshStandardMaterial({ map: textureMap[key], roughness: key === 'earth' ? .74 : .92, metalness: 0 });
+            : new THREE.MeshStandardMaterial({
+                map: textureMap[key],
+                bumpMap: textureMap[key],
+                bumpScale: key === 'earth' ? .018 : key === 'moon' ? .075 : .045,
+                roughness: key === 'earth' ? .68 : key === 'moon' ? .96 : .90,
+                metalness: 0,
+                emissive: 0xffffff,
+                emissiveMap: textureMap[key],
+                emissiveIntensity: key === 'earth' ? .055 : key === 'mars' ? .045 : .032
+              });
 
           const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 48), material);
           mesh.userData.key = key;
@@ -1088,14 +1322,64 @@
         }
 
         function createAsteroid(position, scale=1) {
-          const geometry = new THREE.IcosahedronGeometry(1,1);
-          const material = new THREE.MeshStandardMaterial({ color:0x6b625b, roughness:1, metalness:.03, flatShading:true });
-          const mesh = new THREE.Mesh(geometry,material);
-          mesh.position.copy(position); mesh.scale.setScalar(scale*(.7+Math.random()*1.25));
-          mesh.rotation.set(Math.random()*6,Math.random()*6,Math.random()*6);
+          const geometry = new THREE.IcosahedronGeometry(1, 2);
+          const positions = geometry.attributes.position;
+          const vertex = new THREE.Vector3();
+          const shapeSeed = .82 + Math.random() * .12;
+
+          for (let i = 0; i < positions.count; i++) {
+            vertex.fromBufferAttribute(positions, i);
+            const wave = Math.sin(vertex.x * 7.3 + vertex.y * 4.9) * .07
+              + Math.sin(vertex.z * 9.1 - vertex.x * 3.7) * .05;
+            const deform = shapeSeed + Math.random() * .26 + wave;
+            vertex.normalize().multiplyScalar(deform);
+            positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
+          }
+          positions.needsUpdate = true;
+          geometry.computeVertexNormals();
+
+          const map = asteroidTextureMap[Math.floor(Math.random() * asteroidTextureMap.length)];
+          const material = new THREE.MeshStandardMaterial({
+            map,
+            bumpMap: map,
+            bumpScale: .18,
+            color: 0xd0b091,
+            roughness: .94,
+            metalness: .02,
+            flatShading: true,
+            emissive: 0x3a2115,
+            emissiveIntensity: .38
+          });
+
+          const mesh = new THREE.Mesh(geometry, material);
+          mesh.position.copy(position);
+          mesh.scale.setScalar(scale * (.82 + Math.random() * 1.32));
+          mesh.rotation.set(Math.random()*6, Math.random()*6, Math.random()*6);
+
+          // Bordo tenue: utile nel gioco, ma abbastanza discreto da restare realistico.
+          const rim = new THREE.Mesh(
+            geometry.clone(),
+            new THREE.MeshBasicMaterial({
+              color: 0xd8a676,
+              transparent: true,
+              opacity: .12,
+              side: THREE.BackSide,
+              depthWrite: false
+            })
+          );
+          rim.scale.setScalar(1.065);
+          rim.userData.asteroidRim = true;
+          mesh.add(rim);
+
           scene.add(mesh);
-          const item={mesh,velocity:randomUnit().multiplyScalar(.35+Math.random()*.8),spin:randomUnit().multiplyScalar(.35+Math.random()),radius:mesh.scale.x};
-          asteroids.push(item); return item;
+          const item = {
+            mesh,
+            velocity: randomUnit().multiplyScalar(.35 + Math.random() * .8),
+            spin: randomUnit().multiplyScalar(.35 + Math.random()),
+            radius: mesh.scale.x
+          };
+          asteroids.push(item);
+          return item;
         }
 
         function createCrystal(position) {
