@@ -359,9 +359,37 @@
     #crosshair.locked::before, #crosshair.locked::after { background:#fda4af; box-shadow:0 0 10px #fb7185; }
     #crosshair.locked i { border-color:#fda4af; }
 
-    #radarWrap { position:absolute; right:16px; bottom:16px; width:178px; padding:9px; border-radius:18px; pointer-events:none; }
-    #radarWrap .radar-title { display:flex; justify-content:space-between; color:#bae6fd; font-size:10px; margin-bottom:5px; }
-    #radar { display:block; width:160px; height:160px; border-radius:50%; background:radial-gradient(circle,rgba(8,47,73,.35),rgba(2,6,23,.78)); border:1px solid rgba(125,211,252,.28); }
+    /* Radar sempre contenuto nell'area visibile, anche con zoom o finestre basse */
+    #radarWrap {
+      position: fixed;
+      z-index: 47;
+      right: max(12px, env(safe-area-inset-right));
+      bottom: max(12px, env(safe-area-inset-bottom));
+      width: clamp(126px, min(18vw, 21vh), 178px);
+      max-width: calc(100vw - 24px);
+      padding: 8px;
+      border-radius: 18px;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    #radarWrap .radar-title {
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+      color:#bae6fd;
+      font-size:10px;
+      margin-bottom:5px;
+      white-space:nowrap;
+    }
+    #radar {
+      display:block;
+      width:100%;
+      height:auto;
+      aspect-ratio:1 / 1;
+      border-radius:50%;
+      background:radial-gradient(circle,rgba(8,47,73,.35),rgba(2,6,23,.78));
+      border:1px solid rgba(125,211,252,.28);
+    }
 
     #flightHelp { position:absolute; left:16px; bottom:16px; max-width:440px; padding:10px 12px; border-radius:15px; color:#dbeafe; font-size:11px; line-height:1.45; }
     #flightHelp kbd { display:inline-block; min-width:24px; padding:2px 5px; margin:1px; border:1px solid rgba(125,211,252,.28); border-radius:6px; background:rgba(15,23,42,.8); text-align:center; font:10px ui-monospace,monospace; }
@@ -398,9 +426,38 @@
       .meter { width:calc((100vw - 54px)/2); max-width:210px; }
       .action-stats .action-stat:first-child { display:none; }
       #flightHelp { display:none; }
-      #radarWrap { right:10px; bottom:142px; transform:scale(.74); transform-origin:right bottom; }
+      #radarWrap {
+        right: max(8px, env(safe-area-inset-right));
+        bottom: calc(132px + env(safe-area-inset-bottom));
+        width: clamp(112px, 26vw, 132px);
+        transform:none;
+      }
       #mobileFlight { display:flex; }
       #crosshair { top:48%; }
+    }
+
+    /* Finestre desktop basse o browser molto ingrandito */
+    @media (min-width: 761px) and (max-height: 720px) {
+      #radarWrap {
+        width: clamp(118px, 19vh, 146px);
+        right: max(10px, env(safe-area-inset-right));
+        bottom: max(10px, env(safe-area-inset-bottom));
+      }
+      #flightHelp {
+        max-width: min(420px, calc(100vw - 190px));
+      }
+    }
+
+    /* Smartphone in orizzontale: radar più piccolo e sopra i comandi */
+    @media (max-width: 900px) and (max-height: 520px) {
+      #radarWrap {
+        width: 104px;
+        right: max(8px, env(safe-area-inset-right));
+        bottom: calc(82px + env(safe-area-inset-bottom));
+        padding: 6px;
+        border-radius: 14px;
+      }
+      #radarWrap .radar-title { font-size: 8px; margin-bottom: 3px; }
     }
 
   </style>
