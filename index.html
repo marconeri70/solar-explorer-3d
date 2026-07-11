@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#030712" />
-  <meta name="description" content="Esploratore 3D di Terra, Luna e Marte con missioni d’azione controllabili interamente con il mouse." />
-  <title>Esploratore del Sistema Solare 3D — Pianeti realistici</title>
+  <meta name="description" content="Gioco spaziale 3D con navicella realistica, esplorazione, missioni di soccorso, scorta e battaglie controllabili con il mouse." />
+  <title>Esploratore Spaziale 3D — Battaglie e Missioni</title>
 
   <!--
     Import map: OrbitControls importa internamente il pacchetto "three".
@@ -409,6 +409,46 @@
     #missionResultStats span { display:block; color:var(--muted); font-size:9px; text-transform:uppercase; }
     #missionResultStats strong { display:block; margin-top:3px; font-size:18px; }
 
+    /* Selettore missioni */
+    #missionSelect {
+      position:fixed; inset:0; z-index:80; display:grid; place-items:center;
+      padding:20px; background:radial-gradient(circle at center,rgba(9,35,63,.52),rgba(0,3,10,.9));
+      backdrop-filter:blur(9px); pointer-events:auto;
+    }
+    #missionSelectCard { width:min(980px,100%); max-height:min(760px,92vh); overflow:auto; padding:24px; border-radius:26px; }
+    #missionSelectHeader { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; }
+    #missionSelectHeader h2 { margin:0; font-size:clamp(24px,4vw,38px); }
+    #missionSelectHeader p { margin:6px 0 0; color:var(--muted); line-height:1.5; }
+    .mission-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .mission-choice {
+      position:relative; min-height:210px; padding:18px; overflow:hidden; text-align:left;
+      border-radius:20px; border:1px solid rgba(125,211,252,.25);
+      background:linear-gradient(145deg,rgba(15,23,42,.92),rgba(8,47,73,.45));
+      transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+    }
+    .mission-choice:hover { transform:translateY(-3px); border-color:rgba(103,232,249,.72); box-shadow:0 18px 38px rgba(0,0,0,.35),0 0 25px rgba(14,165,233,.12); }
+    .mission-choice .mission-icon { font-size:38px; display:block; margin-bottom:8px; filter:drop-shadow(0 0 13px rgba(56,189,248,.42)); }
+    .mission-choice h3 { margin:0 0 7px; font-size:20px; color:#f8fafc; }
+    .mission-choice p { margin:0; color:#cbd5e1; font-size:12px; line-height:1.48; }
+    .mission-choice .mission-meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+    .mission-choice .mission-meta span { padding:4px 7px; border-radius:999px; background:rgba(15,23,42,.68); border:1px solid rgba(148,163,184,.2); color:#bae6fd; font-size:9px; text-transform:uppercase; letter-spacing:.06em; }
+    .mission-choice[data-mission="battle"] { background:linear-gradient(145deg,rgba(38,15,30,.95),rgba(127,29,29,.42)); border-color:rgba(251,113,133,.32); }
+    .mission-choice[data-mission="defense"] { background:linear-gradient(145deg,rgba(13,35,38,.95),rgba(6,95,70,.38)); border-color:rgba(52,211,153,.3); }
+    .mission-choice[data-mission="rescue"] { background:linear-gradient(145deg,rgba(31,24,55,.95),rgba(91,33,182,.34)); border-color:rgba(196,181,253,.3); }
+
+    #targetInfo {
+      position:absolute; left:50%; top:calc(50% + 44px); transform:translateX(-50%);
+      min-width:145px; padding:6px 10px; border-radius:10px; text-align:center;
+      color:#fecdd3; background:rgba(34,7,16,.72); border:1px solid rgba(251,113,133,.32);
+      font-size:10px; letter-spacing:.06em; text-transform:uppercase; opacity:0; transition:opacity .12s ease;
+    }
+    #targetInfo.active { opacity:1; }
+
+    @media(max-width:720px){
+      .mission-grid{grid-template-columns:1fr}.mission-choice{min-height:175px}
+      #missionSelectCard{padding:17px}.mission-choice h3{font-size:18px}
+    }
+
     #mobileFlight { display:none; position:absolute; inset:auto 0 max(10px,env(safe-area-inset-bottom)) 0; pointer-events:none; padding:0 10px; justify-content:space-between; align-items:end; }
     .mobile-cluster { display:grid; gap:7px; pointer-events:auto; }
     .mobile-cluster.left { grid-template-columns:52px 52px 52px; grid-template-areas:'. up .' 'left down right'; }
@@ -513,6 +553,7 @@
       </div>
     </div>
     <div id="crosshair"><i></i></div>
+    <div id="targetInfo">Bersaglio</div>
     <div id="radarWrap" class="glass">
       <div class="radar-title"><span>RADAR</span><span>150 u</span></div>
       <canvas id="radar" width="320" height="320"></canvas>
@@ -553,6 +594,40 @@
     </div>
   </div>
 
+  <div id="missionSelect" class="hidden">
+    <div id="missionSelectCard" class="glass">
+      <div id="missionSelectHeader">
+        <div>
+          <h2>Centro missioni</h2>
+          <p>Scegli l'incarico. Ogni scenario ha obiettivi, nemici e condizioni di vittoria differenti.</p>
+        </div>
+        <button id="closeMissionSelect" class="icon-close" type="button" aria-label="Chiudi">×</button>
+      </div>
+      <div class="mission-grid">
+        <button class="mission-choice" data-mission="mars" type="button">
+          <span class="mission-icon">🚀</span><h3>Rotta per Marte</h3>
+          <p>Recupera energia, apri un varco nel campo di asteroidi e raggiungi Marte prima della chiusura della finestra di lancio.</p>
+          <span class="mission-meta"><span>Esplorazione</span><span>Asteroidi</span><span>3 minuti</span></span>
+        </button>
+        <button class="mission-choice" data-mission="battle" type="button">
+          <span class="mission-icon">⚔️</span><h3>Assalto dei Corsari</h3>
+          <p>Affronta ondate di caccia ostili, evita il fuoco nemico e distruggi la nave comandante.</p>
+          <span class="mission-meta"><span>Battaglia</span><span>Boss finale</span><span>Difficile</span></span>
+        </button>
+        <button class="mission-choice" data-mission="defense" type="button">
+          <span class="mission-icon">🛡️</span><h3>Difesa del Convoglio</h3>
+          <p>Scorta una nave cargo dalla Terra verso Marte. I pirati cercheranno di distruggerla: intercettali e proteggi lo scafo.</p>
+          <span class="mission-meta"><span>Scorta</span><span>Ondate</span><span>2 minuti</span></span>
+        </button>
+        <button class="mission-choice" data-mission="rescue" type="button">
+          <span class="mission-icon">🌙</span><h3>Salvataggio Lunare</h3>
+          <p>Raggiungi la Luna, recupera quattro capsule disperse e riportale sulla Terra mentre i droni ostili pattugliano la zona.</p>
+          <span class="mission-meta"><span>Soccorso</span><span>Luna</span><span>Combattimento</span></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
 
   <button id="openHudBtn" class="panel-tab" type="button" title="Apri comandi" aria-label="Apri comandi">☰</button>
   <button id="openInfoBtn" class="panel-tab" type="button" title="Apri informazioni" aria-label="Apri informazioni">ⓘ</button>
@@ -580,7 +655,7 @@
       <div class="row">
         <button id="tourBtn" class="primary grow" type="button">▶ Tour guidato</button>
         <button id="probeBtn" class="success grow" type="button">🚀 Sonda Terra → Marte</button>
-        <button id="actionBtn" class="danger grow" type="button">⚔️ Missione Azione</button>
+        <button id="actionBtn" class="danger grow" type="button">⚔️ Missioni</button>
       </div>
     </section>
 
@@ -1232,7 +1307,11 @@
         const asteroids = [];
         const crystals = [];
         const lasers = [];
+        const enemies = [];
+        const enemyLasers = [];
+        const rescuePods = [];
         const particleBursts = [];
+        let cargoShip = null;
         let audioContext = null;
         let laserCooldown = 0;
         let screenShake = 0;
@@ -1249,49 +1328,126 @@
         const actionRaycaster = new THREE.Raycaster();
         const crosshair = document.getElementById('crosshair');
 
+        const missionCatalog = {
+          mars: { title:'Rotta per Marte', timer:180 },
+          battle: { title:'Assalto dei Corsari', timer:180 },
+          defense: { title:'Difesa del Convoglio', timer:120 },
+          rescue: { title:'Salvataggio Lunare', timer:165 }
+        };
+
         const game = {
-          active: false, score: 0, shield: 100, fuel: 100, timer: 180,
-          objective: 0, collected: 0, destroyed: 0, speed: 0,
-          invulnerable: 0, warpCooldown: 0, prevPaused: false,
+          active: false, mission: 'mars', score: 0, shield: 100, fuel: 100, timer: 180,
+          objective: 0, collected: 0, destroyed: 0, enemiesDestroyed: 0, rescued: 0,
+          cargoHealth: 100, bossDestroyed: false, bossSpawned: false, wave: 1,
+          speed: 0, invulnerable: 0, warpCooldown: 0, prevPaused: false,
           prevLabels: true, startTime: 0
         };
 
         function buildShip() {
           const ship = new THREE.Group();
-          const white = new THREE.MeshStandardMaterial({ color:0xdbeafe, metalness:.72, roughness:.22 });
-          const dark = new THREE.MeshStandardMaterial({ color:0x172554, metalness:.62, roughness:.3 });
-          const cyan = new THREE.MeshStandardMaterial({ color:0x22d3ee, emissive:0x0891b2, emissiveIntensity:2.6, metalness:.25, roughness:.25 });
-          const orange = new THREE.MeshStandardMaterial({ color:0xfb923c, emissive:0xea580c, emissiveIntensity:2.3 });
+          ship.name = 'Aquila-X1';
 
-          const hull = new THREE.Mesh(new THREE.CapsuleGeometry(.55, 2.7, 6, 16), white);
-          hull.rotation.x = Math.PI / 2;
-          const nose = new THREE.Mesh(new THREE.ConeGeometry(.57, 1.35, 18), dark);
-          nose.rotation.x = -Math.PI / 2; nose.position.z = -2.5;
-          const cockpit = new THREE.Mesh(new THREE.SphereGeometry(.48, 20, 14, 0, Math.PI*2, 0, Math.PI*.62), cyan);
-          cockpit.scale.set(1, .55, 1.25); cockpit.position.set(0,.42,-.55);
-          const wingGeo = new THREE.BufferGeometry();
-          wingGeo.setAttribute('position', new THREE.Float32BufferAttribute([
-            0,0,0, -2.45,0,.9, -1.25,0,-1.25,
-            0,0,0,  2.45,0,.9,  1.25,0,-1.25
+          const hullMat = new THREE.MeshPhysicalMaterial({
+            color:0xcbd5e1, metalness:.84, roughness:.24, clearcoat:.72, clearcoatRoughness:.18
+          });
+          const panelMat = new THREE.MeshStandardMaterial({ color:0x1e293b, metalness:.88, roughness:.28 });
+          const armorMat = new THREE.MeshStandardMaterial({ color:0x64748b, metalness:.78, roughness:.34 });
+          const glassMat = new THREE.MeshPhysicalMaterial({
+            color:0x38bdf8, emissive:0x075985, emissiveIntensity:.85,
+            metalness:.05, roughness:.08, transmission:.28, transparent:true, opacity:.88,
+            clearcoat:1, clearcoatRoughness:.06
+          });
+          const engineMat = new THREE.MeshStandardMaterial({ color:0x263445, metalness:.9, roughness:.18 });
+          const hotMat = new THREE.MeshStandardMaterial({ color:0xffb347, emissive:0xff5a14, emissiveIntensity:3.2, metalness:.12, roughness:.24 });
+
+          // Fusoliera affusolata composta da sezioni, più simile a un vero veicolo spaziale.
+          const body = new THREE.Mesh(new THREE.CapsuleGeometry(.62, 3.35, 8, 24), hullMat);
+          body.rotation.x = Math.PI / 2;
+          body.scale.set(1, 1, .94);
+
+          const nose = new THREE.Mesh(new THREE.ConeGeometry(.62, 1.65, 28), armorMat);
+          nose.rotation.x = -Math.PI / 2;
+          nose.position.z = -3.15;
+
+          const noseTip = new THREE.Mesh(new THREE.ConeGeometry(.16, .72, 18), panelMat);
+          noseTip.rotation.x = -Math.PI / 2;
+          noseTip.position.z = -4.28;
+
+          const cockpit = new THREE.Mesh(new THREE.SphereGeometry(.61, 32, 18), glassMat);
+          cockpit.scale.set(.88,.5,1.45);
+          cockpit.position.set(0,.49,-1.05);
+          cockpit.rotation.x = -.08;
+
+          const canopyFrame = new THREE.Mesh(new THREE.TorusGeometry(.48,.035,8,30,Math.PI), panelMat);
+          canopyFrame.rotation.set(Math.PI/2,0,Math.PI/2);
+          canopyFrame.position.set(0,.52,-1.05);
+
+          // Ali trapezoidali con spessore e pannelli mobili.
+          const wingShape = new THREE.Shape();
+          wingShape.moveTo(0,-.55); wingShape.lineTo(2.72,.18); wingShape.lineTo(2.2,1.02);
+          wingShape.lineTo(.3,.53); wingShape.closePath();
+          const wingGeo = new THREE.ExtrudeGeometry(wingShape,{depth:.12,bevelEnabled:true,bevelSize:.035,bevelThickness:.035,bevelSegments:2});
+          wingGeo.rotateX(Math.PI/2); wingGeo.translate(0,-.09,-.28);
+          const wingR = new THREE.Mesh(wingGeo, armorMat);
+          const wingL = wingR.clone(); wingL.scale.x = -1;
+
+          const wingPanelR = new THREE.Mesh(new THREE.BoxGeometry(1.75,.04,.58),panelMat);
+          wingPanelR.position.set(1.45,.03,.38); wingPanelR.rotation.y=-.17;
+          const wingPanelL=wingPanelR.clone(); wingPanelL.position.x=-1.45; wingPanelL.rotation.y=.17;
+
+          // Stabilizzatori verticali.
+          const finGeo = new THREE.BufferGeometry();
+          finGeo.setAttribute('position',new THREE.Float32BufferAttribute([
+            0,0,0, .08,1.25,.72, .08,0,1.42,
+            0,0,0,-.08,1.25,.72,-.08,0,1.42
           ],3));
-          wingGeo.computeVertexNormals();
-          const wings = new THREE.Mesh(wingGeo, dark); wings.position.y = -.05;
-          const engineL = new THREE.Mesh(new THREE.CylinderGeometry(.24,.34,.65,14), orange);
-          const engineR = engineL.clone();
-          engineL.rotation.x = engineR.rotation.x = Math.PI/2;
-          engineL.position.set(-.62,0,1.72); engineR.position.set(.62,0,1.72);
+          finGeo.computeVertexNormals();
+          const fin = new THREE.Mesh(finGeo,panelMat); fin.position.set(0,.24,1.28);
+
+          // Due gondole motore realistiche con ugelli concentrici.
+          const engineParts=[];
           const glowMat = new THREE.SpriteMaterial({ map:glowTexture(), color:0x38bdf8, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false });
-          const glowL = new THREE.Sprite(glowMat); const glowR = glowL.clone();
-          glowL.position.set(-.62,0,2.15); glowR.position.set(.62,0,2.15);
-          glowL.scale.set(.9,2.8,1); glowR.scale.copy(glowL.scale);
-          glowL.userData.engineGlow = glowR.userData.engineGlow = true;
-          const light = new THREE.PointLight(0x38bdf8, 3.2, 14, 2); light.position.set(0,0,2.2);
-          ship.add(hull,nose,cockpit,wings,engineL,engineR,glowL,glowR,light);
-          ship.visible = false;
-          ship.scale.setScalar(1.15);
+          for(const x of [-.78,.78]){
+            const nacelle = new THREE.Mesh(new THREE.CylinderGeometry(.31,.4,1.55,24),engineMat);
+            nacelle.rotation.x=Math.PI/2; nacelle.position.set(x,-.05,1.72);
+            const intake = new THREE.Mesh(new THREE.TorusGeometry(.315,.075,12,28),armorMat);
+            intake.rotation.x=Math.PI/2; intake.position.set(x,-.05,.96);
+            const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(.28,.18,.48,24,1,true),hotMat);
+            nozzle.rotation.x=Math.PI/2; nozzle.position.set(x,-.05,2.63);
+            const glow = new THREE.Sprite(glowMat.clone());
+            glow.position.set(x,-.05,2.95); glow.scale.set(.9,3.0,1); glow.userData.engineGlow=true;
+            engineParts.push(nacelle,intake,nozzle,glow);
+          }
+
+          // Cannoni anteriori e sensori.
+          const cannons=[];
+          for(const x of [-1.18,1.18]){
+            const mount=new THREE.Mesh(new THREE.BoxGeometry(.24,.22,.82),panelMat); mount.position.set(x,-.05,-1.45);
+            const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.055,.075,1.25,12),armorMat);
+            barrel.rotation.x=Math.PI/2; barrel.position.set(x,-.04,-2.25);
+            const muzzle=new THREE.PointLight(0x67e8f9,.25,4,2); muzzle.position.set(x,-.04,-2.9);
+            cannons.push(mount,barrel,muzzle);
+          }
+
+          // Pannellatura e luci di navigazione.
+          for(const z of [-.1,.65,1.25]){
+            const ring=new THREE.Mesh(new THREE.TorusGeometry(.635,.024,8,34),panelMat);
+            ring.rotation.x=Math.PI/2; ring.position.z=z; ship.add(ring);
+          }
+          const navL=new THREE.PointLight(0x22c55e,1.1,6,2); navL.position.set(-2.55,.04,.22);
+          const navR=new THREE.PointLight(0xef4444,1.1,6,2); navR.position.set(2.55,.04,.22);
+          const headlight=new THREE.SpotLight(0xbde8ff,5.2,65,.42,.45,1.5);
+          headlight.position.set(0,.2,-3.2); headlight.target.position.set(0,0,-24);
+
+          const engineLight = new THREE.PointLight(0x38bdf8,4.6,18,2); engineLight.position.set(0,0,2.8);
+          ship.add(body,nose,noseTip,cockpit,canopyFrame,wingL,wingR,wingPanelL,wingPanelR,fin,
+            ...engineParts,...cannons,navL,navR,headlight,headlight.target,engineLight);
+          ship.visible=false;
+          ship.scale.setScalar(1.05);
           scene.add(ship);
           return ship;
         }
+
         const playerShip = buildShip();
 
         function ensureAudio() {
@@ -1307,7 +1463,7 @@
             const gain = audioContext.createGain();
             osc.connect(gain); gain.connect(audioContext.destination);
             const cfg = {
-              laser:[620,180,.11,'sawtooth'], collect:[520,980,.2,'sine'], hit:[120,55,.18,'square'],
+              laser:[620,180,.11,'sawtooth'], enemy:[280,110,.09,'square'], collect:[520,980,.2,'sine'], hit:[120,55,.18,'square'],
               warp:[90,760,.52,'sawtooth'], win:[440,880,.7,'triangle'], fail:[180,70,.6,'square']
             }[type] || [440,220,.15,'sine'];
             osc.type=cfg[3]; osc.frequency.setValueAtTime(cfg[0],now); osc.frequency.exponentialRampToValueAtTime(Math.max(30,cfg[1]),now+cfg[2]);
@@ -1319,6 +1475,79 @@
         function randomUnit() {
           const v = new THREE.Vector3(Math.random()*2-1,Math.random()*2-1,Math.random()*2-1);
           return v.lengthSq() ? v.normalize() : new THREE.Vector3(1,0,0);
+        }
+
+        function buildEnemyShip(boss=false) {
+          const group=new THREE.Group();
+          const hull=new THREE.MeshStandardMaterial({color:boss?0x531414:0x3f2026,metalness:.76,roughness:.3});
+          const armor=new THREE.MeshStandardMaterial({color:boss?0x9f1239:0x7f1d1d,metalness:.7,roughness:.32});
+          const glow=new THREE.MeshStandardMaterial({color:0xff5a67,emissive:0xef123f,emissiveIntensity:3.2,roughness:.18});
+
+          const core=new THREE.Mesh(new THREE.CapsuleGeometry(boss?.62:.38,boss?2.8:1.65,6,16),hull);
+          core.rotation.x=Math.PI/2;
+          const nose=new THREE.Mesh(new THREE.ConeGeometry(boss?.62:.4,boss?1.5:.95,18),armor);
+          nose.rotation.x=-Math.PI/2; nose.position.z=boss?-2.85:-1.8;
+          const cockpit=new THREE.Mesh(new THREE.SphereGeometry(boss?.5:.32,18,12),glow);
+          cockpit.scale.set(1,.42,1.35); cockpit.position.set(0,.34,boss?-.85:-.5);
+          const wingGeo=new THREE.BufferGeometry();
+          const span=boss?3.8:2.25;
+          wingGeo.setAttribute('position',new THREE.Float32BufferAttribute([
+            0,0,-.7,-span,0,.35,-1.15,0,-1.2,
+            0,0,-.7, span,0,.35, 1.15,0,-1.2
+          ],3)); wingGeo.computeVertexNormals();
+          const wings=new THREE.Mesh(wingGeo,armor);
+          const engineMat=new THREE.SpriteMaterial({map:glowTexture(),color:0xff334f,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false});
+          for(const x of [boss?-1.05:-.48,boss?1.05:.48]){
+            const e=new THREE.Sprite(engineMat.clone());e.position.set(x,0,boss?2.3:1.42);e.scale.set(boss?1.25:.72,boss?3.4:2.2,1);e.userData.enemyEngine=true;group.add(e);
+          }
+          const light=new THREE.PointLight(0xff2747,boss?5:2.1,boss?22:11,2);light.position.set(0,0,boss?2.3:1.4);
+          group.add(core,nose,cockpit,wings,light);
+          group.scale.setScalar(boss?1.35:1);
+          return group;
+        }
+
+        function createEnemy(position,boss=false,targetMode='player'){
+          const mesh=buildEnemyShip(boss); mesh.position.copy(position); scene.add(mesh);
+          const item={mesh,boss,targetMode,health:boss?420:72,maxHealth:boss?420:72,speed:boss?8.2:10+Math.random()*3,
+            fireCooldown:.4+Math.random()*1.2,phase:Math.random()*TWO_PI,radius:boss?2.4:1.25};
+          enemies.push(item); return item;
+        }
+
+        function fireEnemyLaser(enemy,targetPos){
+          const direction=targetPos.clone().sub(enemy.mesh.position).normalize();
+          const material=new THREE.MeshBasicMaterial({color:enemy.boss?0xff1744:0xff5b6e});
+          const mesh=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,1.7,7),material);
+          mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction);
+          mesh.position.copy(enemy.mesh.position).addScaledVector(direction,1.7);
+          scene.add(mesh); enemyLasers.push({mesh,velocity:direction.multiplyScalar(enemy.boss?47:40),life:3,damage:enemy.boss?14:8,target:enemy.targetMode});
+          sfx('enemy');
+        }
+
+        function buildCargoShip(){
+          const group=new THREE.Group();
+          const metal=new THREE.MeshStandardMaterial({color:0x75869b,metalness:.72,roughness:.38});
+          const dark=new THREE.MeshStandardMaterial({color:0x253244,metalness:.8,roughness:.3});
+          const cargo=new THREE.MeshStandardMaterial({color:0x2b6f67,metalness:.52,roughness:.42});
+          const body=new THREE.Mesh(new THREE.BoxGeometry(1.5,1.25,5.8),metal); body.position.z=-.2;
+          const bridge=new THREE.Mesh(new THREE.BoxGeometry(1.15,.6,1.3),dark);bridge.position.set(0,.82,-1.65);
+          for(const x of [-1.15,1.15]) for(const z of [-.8,1.15]){
+            const pod=new THREE.Mesh(new THREE.BoxGeometry(1,.9,1.65),cargo);pod.position.set(x,0,z);group.add(pod);
+          }
+          const glowMat=new THREE.SpriteMaterial({map:glowTexture(),color:0x34d399,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false});
+          for(const x of [-.48,.48]){const g=new THREE.Sprite(glowMat.clone());g.position.set(x,0,3.05);g.scale.set(.75,2.5,1);g.userData.cargoEngine=true;group.add(g);}
+          const light=new THREE.PointLight(0x34d399,2.5,14,2);light.position.set(0,0,3);
+          group.add(body,bridge,light); return group;
+        }
+
+        function createRescuePod(position){
+          const group=new THREE.Group();
+          const shell=new THREE.MeshStandardMaterial({color:0xf8fafc,metalness:.55,roughness:.3});
+          const glass=new THREE.MeshStandardMaterial({color:0xa78bfa,emissive:0x6d28d9,emissiveIntensity:2.2,transparent:true,opacity:.9});
+          const body=new THREE.Mesh(new THREE.CapsuleGeometry(.34,.8,6,14),shell); body.rotation.x=Math.PI/2;
+          const windowMesh=new THREE.Mesh(new THREE.SphereGeometry(.28,16,10),glass);windowMesh.scale.set(1,.55,1);windowMesh.position.set(0,.27,-.2);
+          const beacon=new THREE.PointLight(0xc4b5fd,2.6,12,2);beacon.position.set(0,.8,0);
+          group.add(body,windowMesh,beacon);group.position.copy(position);scene.add(group);
+          rescuePods.push({mesh:group,phase:Math.random()*TWO_PI});
         }
 
         function createAsteroid(position, scale=1) {
@@ -1407,6 +1636,37 @@
           }
         }
 
+        function spawnEnemyWave(count,boss=false,targetMode='player',center=playerShip.position){
+          for(let i=0;i<count;i++){
+            const offset=randomUnit().multiplyScalar((boss?36:24)+Math.random()*(boss?16:24));
+            createEnemy(center.clone().add(offset),boss,targetMode);
+          }
+        }
+
+        function spawnMissionContent(){
+          clearActionObjects();
+          const earth=scenePositions.earth.clone();
+          const mars=scenePositions.mars.clone();
+          if(game.mission==='mars'){
+            spawnActionField();
+          }else if(game.mission==='battle'){
+            for(let i=0;i<14;i++) createAsteroid(playerShip.position.clone().add(randomUnit().multiplyScalar(22+Math.random()*72)),.55+Math.random());
+            spawnEnemyWave(5,false,'player',playerShip.position);
+          }else if(game.mission==='defense'){
+            cargoShip={mesh:buildCargoShip(),progress:0,health:100};
+            cargoShip.mesh.position.copy(earth).add(new THREE.Vector3(0,2,6));
+            const q=mars.clone().sub(earth).normalize();cargoShip.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),q);
+            scene.add(cargoShip.mesh);
+            for(let i=0;i<10;i++) createAsteroid(earth.clone().lerp(mars,.15+Math.random()*.7).add(randomUnit().multiplyScalar(12+Math.random()*24)),.5+Math.random());
+            spawnEnemyWave(5,false,'cargo',cargoShip.mesh.position);
+          }else if(game.mission==='rescue'){
+            const moon=scenePositions.moon.clone();
+            for(let i=0;i<4;i++) createRescuePod(moon.clone().add(randomUnit().multiplyScalar(5+Math.random()*8)));
+            for(let i=0;i<12;i++) createAsteroid(moon.clone().add(randomUnit().multiplyScalar(10+Math.random()*24)),.45+Math.random());
+            spawnEnemyWave(4,false,'player',moon);
+          }
+        }
+
         function disposeObject(object) {
           if (!object) return;
           object.traverse?.(o=>{o.geometry?.dispose?.(); if(Array.isArray(o.material))o.material.forEach(m=>m.dispose?.()); else o.material?.dispose?.();});
@@ -1417,6 +1677,10 @@
           asteroids.splice(0).forEach(a=>disposeObject(a.mesh));
           crystals.splice(0).forEach(c=>disposeObject(c.mesh));
           lasers.splice(0).forEach(l=>disposeObject(l.mesh));
+          enemies.splice(0).forEach(e=>disposeObject(e.mesh));
+          enemyLasers.splice(0).forEach(l=>disposeObject(l.mesh));
+          rescuePods.splice(0).forEach(p=>disposeObject(p.mesh));
+          if(cargoShip){disposeObject(cargoShip.mesh);cargoShip=null;}
           particleBursts.splice(0).forEach(p=>disposeObject(p.points));
         }
 
@@ -1456,38 +1720,68 @@
         }
 
         function currentObjectiveText() {
-          if(game.objective===0) return `Raccogli i nuclei energetici (${game.collected}/3)`;
-          if(game.objective===1) return `Distruggi gli asteroidi (${game.destroyed}/5)`;
-          return `Raggiungi Marte — distanza ${Math.round(playerShip.position.distanceTo(scenePositions.mars))} u`;
+          if(game.mission==='mars'){
+            if(game.objective===0) return `Raccogli i nuclei energetici (${game.collected}/3)`;
+            if(game.objective===1) return `Distruggi gli asteroidi (${game.destroyed}/5)`;
+            return `Raggiungi Marte — distanza ${Math.round(playerShip.position.distanceTo(scenePositions.mars))} u`;
+          }
+          if(game.mission==='battle'){
+            if(!game.bossSpawned) return `Elimina i caccia corsari (${game.enemiesDestroyed}/8)`;
+            return game.bossDestroyed?'Settore messo in sicurezza':'Distruggi la nave comandante';
+          }
+          if(game.mission==='defense'){
+            return `Proteggi il cargo — scafo ${Math.max(0,Math.round(game.cargoHealth))}% · ostili abbattuti ${game.enemiesDestroyed}`;
+          }
+          if(game.objective===0) return `Recupera le capsule lunari (${game.rescued}/4)`;
+          return `Riporta i superstiti sulla Terra — distanza ${Math.round(playerShip.position.distanceTo(scenePositions.earth))} u`;
         }
 
         function advanceObjective() {
-          if(game.objective===0 && game.collected>=3){game.objective=1;toast('⚔️ Energia acquisita: libera la rotta dagli asteroidi');}
-          if(game.objective===1 && game.destroyed>=5){game.objective=2;toast('🔴 Rotta libera: raggiungi Marte o usa il Warp');}
+          if(game.mission==='mars'){
+            if(game.objective===0 && game.collected>=3){game.objective=1;toast('⚔️ Energia acquisita: libera la rotta dagli asteroidi');}
+            if(game.objective===1 && game.destroyed>=5){game.objective=2;toast('🔴 Rotta libera: raggiungi Marte o usa il Warp');}
+          }else if(game.mission==='rescue'&&game.rescued>=4&&game.objective===0){
+            game.objective=1;toast('🌍 Capsule al sicuro: torna sulla Terra');
+          }
         }
 
-        function startAction() {
+        function startAction(missionType='mars') {
           ensureAudio(); stopTour();
-          game.active=true; game.score=0; game.shield=100; game.fuel=100; game.timer=180; game.objective=0; game.collected=0; game.destroyed=0; game.speed=8; game.invulnerable=0; game.warpCooldown=0; game.prevPaused=paused; game.prevLabels=labelsVisible; game.startTime=performance.now();
+          game.mission=missionCatalog[missionType]?missionType:'mars';
+          game.active=true; game.score=0; game.shield=100; game.fuel=100; game.timer=missionCatalog[game.mission].timer;
+          game.objective=0; game.collected=0; game.destroyed=0; game.enemiesDestroyed=0; game.rescued=0;
+          game.cargoHealth=100; game.bossDestroyed=false; game.bossSpawned=false; game.wave=1;
+          game.speed=8; game.invulnerable=0; game.warpCooldown=0; game.prevPaused=paused; game.prevLabels=labelsVisible; game.startTime=performance.now();
           mouseFlight.x=0; mouseFlight.y=0; mouseFlight.throttle=.45; mouseFlight.hasPointer=false; mouseFlight.firing=false; mouseFlight.boosting=false;
           crosshair.style.left='50%'; crosshair.style.top='50%'; crosshair.classList.remove('locked');
           paused=true; labelsVisible=false;
+          document.getElementById('missionSelect').classList.add('hidden');
           document.body.classList.add('action-active'); actionHud.classList.remove('hidden'); document.getElementById('missionResult').classList.add('hidden');
           document.getElementById('actionBtn').textContent='■ Missione in corso';
+          document.querySelector('#actionObjective small').textContent=missionCatalog[game.mission].title;
           if(distReal){distReal=false;document.getElementById('distRealChk').checked=false;updatePositions(simulationDays);applyBodySizes();rebuildOrbits();}
           playerShip.visible=true;
-          playerShip.position.copy(scenePositions.earth).add(new THREE.Vector3(0,7,12));
-          const dir=scenePositions.mars.clone().sub(playerShip.position).normalize();
+          const startPos=game.mission==='rescue'?scenePositions.earth.clone():scenePositions.earth.clone();
+          playerShip.position.copy(startPos).add(new THREE.Vector3(0,7,12));
+          const target=game.mission==='rescue'?scenePositions.moon:scenePositions.mars;
+          const dir=target.clone().sub(playerShip.position).normalize();
           playerShip.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),dir);
           controls.enabled=false;
-          spawnActionField(); updateActionHud();
-          toast('🖱️ Muovi il mouse per pilotare, rotella per la spinta, click sinistro per sparare');
+          spawnMissionContent(); updateActionHud();
+          const intro={
+            mars:'🚀 Recupera energia, apri un varco e raggiungi Marte',
+            battle:'⚔️ Allarme: caccia corsari in avvicinamento',
+            defense:'🛡️ Mantieni il cargo integro fino al termine della rotta',
+            rescue:'🌙 Recupera le capsule disperse vicino alla Luna'
+          }[game.mission];
+          toast(intro);
         }
 
         function exitAction(showToast=true) {
           game.active=false; clearActionObjects(); playerShip.visible=false; paused=game.prevPaused; labelsVisible=game.prevLabels; controls.enabled=true;
           document.body.classList.remove('action-active'); actionHud.classList.add('hidden'); document.getElementById('missionResult').classList.add('hidden');
-          document.getElementById('actionBtn').textContent='⚔️ Missione Azione';
+          document.getElementById('actionBtn').textContent='⚔️ Missioni';
+          document.querySelector('#actionObjective small').textContent='Missione attiva';
           Object.keys(input).forEach(k=>input[k]=false);
           mouseFlight.firing=false; mouseFlight.boosting=false; crosshair.classList.remove('locked');
           focusOn('earth',true); if(showToast)toast('Ritorno alla modalità esplorazione');
@@ -1498,15 +1792,27 @@
           game.active=false; game.speed=0; Object.keys(input).forEach(k=>input[k]=false);
           const result=document.getElementById('missionResult'); result.classList.remove('hidden');
           document.getElementById('resultIcon').textContent=success?'🏆':'💥';
-          document.getElementById('resultTitle').textContent=success?'Missione Marte completata':'Missione fallita';
-          document.getElementById('resultText').textContent=success?'Hai raccolto energia, aperto un varco nel campo di asteroidi e raggiunto Marte. Finestra di lancio conquistata!':`${reason}. Migliora la rotta e riprova.`;
-          document.getElementById('missionResultStats').innerHTML=`<div><span>Punti</span><strong>${game.score}</strong></div><div><span>Asteroidi</span><strong>${game.destroyed}</strong></div><div><span>Scudo</span><strong>${Math.round(game.shield)}%</strong></div>`;
+          document.getElementById('resultTitle').textContent=success?`${missionCatalog[game.mission].title} completata`:'Missione fallita';
+          const successTexts={
+            mars:'Hai aperto il corridoio tra gli asteroidi e raggiunto Marte.',
+            battle:'I corsari sono stati sconfitti e il settore è nuovamente sicuro.',
+            defense:'Il convoglio ha attraversato la zona ostile senza essere distrutto.',
+            rescue:'Le capsule sono state recuperate e i superstiti riportati sulla Terra.'
+          };
+          document.getElementById('resultText').textContent=success?successTexts[game.mission]:`${reason}. Correggi la strategia e riprova.`;
+          const secondLabel=game.mission==='rescue'?'Salvati':game.mission==='defense'?'Cargo':'Nemici';
+          const secondValue=game.mission==='rescue'?game.rescued:game.mission==='defense'?`${Math.round(game.cargoHealth)}%`:game.mission==='mars'?game.destroyed:game.enemiesDestroyed;
+          document.getElementById('missionResultStats').innerHTML=`<div><span>Punti</span><strong>${game.score}</strong></div><div><span>${secondLabel}</span><strong>${secondValue}</strong></div><div><span>Scudo</span><strong>${Math.round(game.shield)}%</strong></div>`;
           sfx(success?'win':'fail');
         }
 
         function useWarp() {
           if(!game.active || game.warpCooldown>0 || game.fuel<25) return;
-          const target=scenePositions.mars; const direction=target.clone().sub(playerShip.position); const distance=direction.length();
+          let target=scenePositions.mars;
+          if(game.mission==='rescue') target=game.objective===0?scenePositions.moon:scenePositions.earth;
+          else if(game.mission==='battle'&&enemies.length) target=enemies.reduce((best,e)=>e.mesh.position.distanceTo(playerShip.position)<best.mesh.position.distanceTo(playerShip.position)?e:best,enemies[0]).mesh.position;
+          else if(game.mission==='defense'&&cargoShip) target=cargoShip.mesh.position;
+          const direction=target.clone().sub(playerShip.position); const distance=direction.length();
           if(distance<10) return;
           game.fuel-=25; game.warpCooldown=5; sfx('warp');
           const jump=Math.min(42,Math.max(10,distance-8)); playerShip.position.addScaledVector(direction.normalize(),jump);
@@ -1531,14 +1837,23 @@
           for(const r of [48,96,144]){ctx.beginPath();ctx.arc(cx,cy,r,0,TWO_PI);ctx.stroke();}
           ctx.beginPath();ctx.moveTo(cx,10);ctx.lineTo(cx,h-10);ctx.moveTo(10,cy);ctx.lineTo(w-10,cy);ctx.stroke();
           const draw=(pos,color,size)=>{const rel=pos.clone().sub(playerShip.position);const x=cx+THREE.MathUtils.clamp(rel.x/range,-1,1)*145;const y=cy+THREE.MathUtils.clamp(rel.z/range,-1,1)*145;ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,size,0,TWO_PI);ctx.fill();};
-          asteroids.forEach(a=>draw(a.mesh.position,'#fb7185',3)); crystals.forEach(c=>draw(c.mesh.position,'#67e8f9',4)); draw(scenePositions.mars,'#f97355',7);
+          asteroids.forEach(a=>draw(a.mesh.position,'#f59e0b',2.5));
+          crystals.forEach(c=>draw(c.mesh.position,'#67e8f9',4));
+          rescuePods.forEach(p=>draw(p.mesh.position,'#c4b5fd',4));
+          enemies.forEach(e=>draw(e.mesh.position,e.boss?'#ff1744':'#fb7185',e.boss?6:3.5));
+          if(cargoShip)draw(cargoShip.mesh.position,'#34d399',6);
+          draw(game.mission==='rescue'?scenePositions.moon:scenePositions.mars,game.mission==='rescue'?'#e2e8f0':'#f97355',7);
           ctx.translate(cx,cy);ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,7);ctx.lineTo(0,4);ctx.lineTo(-6,7);ctx.closePath();ctx.fill();ctx.restore();
         }
 
         function updateAction(dt) {
           if(!game.active) return;
           game.timer-=dt; laserCooldown=Math.max(0,laserCooldown-dt); game.invulnerable=Math.max(0,game.invulnerable-dt); game.warpCooldown=Math.max(0,game.warpCooldown-dt);
-          if(game.timer<=0){finishAction(false,'Tempo esaurito');return;}
+          if(game.timer<=0){
+            if(game.mission==='defense'&&game.cargoHealth>0){game.score+=1200+Math.round(game.cargoHealth*8);finishAction(true);}
+            else finishAction(false,'Tempo esaurito');
+            return;
+          }
 
           const deadZone=.055;
           const steerX=Math.sign(mouseFlight.x)*Math.max(0,(Math.abs(mouseFlight.x)-deadZone)/(1-deadZone));
@@ -1568,8 +1883,15 @@
 
           actionPointer.set(mouseFlight.x,-mouseFlight.y);
           actionRaycaster.setFromCamera(actionPointer,camera);
-          const lockHits=actionRaycaster.intersectObjects(asteroids.map(a=>a.mesh),false);
+          const lockTargets=[...asteroids.map(a=>a.mesh),...enemies.map(e=>e.mesh)];
+          const lockHits=actionRaycaster.intersectObjects(lockTargets,true);
           crosshair.classList.toggle('locked',lockHits.length>0);
+          const targetInfo=document.getElementById('targetInfo');
+          if(lockHits.length){
+            const enemy=enemies.find(e=>e.mesh===lockHits[0].object||e.mesh.children.includes(lockHits[0].object));
+            targetInfo.textContent=enemy?`${enemy.boss?'Comandante':'Caccia'} · ${Math.max(0,Math.round(enemy.health))} HP`:'Asteroide';
+            targetInfo.classList.add('active');
+          }else targetInfo.classList.remove('active');
 
           const desired=playerShip.position.clone().add(new THREE.Vector3(0,4.8,13.5).applyQuaternion(playerShip.quaternion));
           if(screenShake>0){screenShake=Math.max(0,screenShake-dt);desired.add(randomUnit().multiplyScalar(screenShake*.65));}
@@ -1580,10 +1902,75 @@
             a.mesh.position.addScaledVector(a.velocity,dt);a.mesh.rotation.x+=a.spin.x*dt;a.mesh.rotation.y+=a.spin.y*dt;a.mesh.rotation.z+=a.spin.z*dt;
             if(a.mesh.position.distanceTo(playerShip.position)<a.radius+1.25){damagePlayer(17);explosion(a.mesh.position,0xfb7185,22);a.mesh.position.copy(playerShip.position).add(randomUnit().multiplyScalar(35+Math.random()*55));}
           }
+
+          // Capsule e nuclei da recuperare.
           for(let i=crystals.length-1;i>=0;i--){const c=crystals[i];c.phase+=dt;c.mesh.rotation.y+=dt*1.8;c.mesh.rotation.x+=dt*.7;c.mesh.position.y+=Math.sin(c.phase)*dt*.25;if(c.mesh.position.distanceTo(playerShip.position)<2.2){sfx('collect');game.collected++;game.score+=250;game.fuel=Math.min(100,game.fuel+18);explosion(c.mesh.position,0x67e8f9,28);disposeObject(c.mesh);crystals.splice(i,1);advanceObjective();}}
-          for(let i=lasers.length-1;i>=0;i--){const l=lasers[i];l.life-=dt;l.mesh.position.addScaledVector(l.velocity,dt);let hit=false;for(let j=asteroids.length-1;j>=0;j--){const a=asteroids[j];if(l.mesh.position.distanceTo(a.mesh.position)<a.radius+1){hit=true;game.destroyed++;game.score+=120;explosion(a.mesh.position,0xff9f43,40);disposeObject(a.mesh);asteroids.splice(j,1);advanceObjective();break;}}if(hit||l.life<=0){disposeObject(l.mesh);lasers.splice(i,1);}}
+          for(let i=rescuePods.length-1;i>=0;i--){const p=rescuePods[i];p.phase+=dt;p.mesh.rotation.y+=dt*.9;p.mesh.position.y+=Math.sin(p.phase)*dt*.18;if(p.mesh.position.distanceTo(playerShip.position)<2.4){sfx('collect');game.rescued++;game.score+=400;game.shield=Math.min(100,game.shield+8);explosion(p.mesh.position,0xc4b5fd,32);disposeObject(p.mesh);rescuePods.splice(i,1);advanceObjective();}}
+
+          // Movimento e combattimento dei caccia nemici.
+          for(let i=enemies.length-1;i>=0;i--){
+            const e=enemies[i]; e.phase+=dt; e.fireCooldown-=dt;
+            const targetObj=e.targetMode==='cargo'&&cargoShip?cargoShip.mesh:playerShip;
+            const toTarget=targetObj.position.clone().sub(e.mesh.position); const distance=toTarget.length();
+            const desiredQ=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,-1),toTarget.clone().normalize());
+            e.mesh.quaternion.slerp(desiredQ,1-Math.pow(.025,dt));
+            const strafe=new THREE.Vector3(Math.sin(e.phase*1.7),Math.cos(e.phase*1.15)*.35,0).applyQuaternion(e.mesh.quaternion);
+            e.mesh.position.addScaledVector(toTarget.normalize(),e.speed*dt).addScaledVector(strafe,dt*(e.boss?2.5:1.6));
+            e.mesh.children.filter(c=>c.userData.enemyEngine).forEach(g=>{const k=.9+Math.sin(e.phase*8)*.08;g.scale.set((e.boss?1.25:.72)*k,(e.boss?3.4:2.2)*k,1);});
+            if(distance<(e.boss?72:58)&&e.fireCooldown<=0){fireEnemyLaser(e,targetObj.position);e.fireCooldown=(e.boss?.42:.85)+Math.random()*(e.boss?.35:.75);}
+            if(distance<e.radius+1.25&&targetObj===playerShip){damagePlayer(e.boss?28:18);e.mesh.position.add(randomUnit().multiplyScalar(18));}
+          }
+
+          // Traiettoria della nave cargo.
+          if(cargoShip){
+            cargoShip.progress=Math.min(1,cargoShip.progress+dt/122);
+            const route=scenePositions.earth.clone().lerp(scenePositions.mars,cargoShip.progress);
+            route.y+=Math.sin(cargoShip.progress*Math.PI)*8;
+            cargoShip.mesh.position.lerp(route,1-Math.pow(.01,dt));
+            cargoShip.mesh.children.filter(c=>c.userData.cargoEngine).forEach(g=>{const k=.96+Math.sin(performance.now()*.015)*.08;g.scale.set(.75*k,2.5*k,1);});
+          }
+
+          // Colpi nemici contro giocatore o cargo.
+          for(let i=enemyLasers.length-1;i>=0;i--){
+            const l=enemyLasers[i];l.life-=dt;l.mesh.position.addScaledVector(l.velocity,dt);let hit=false;
+            if(l.target==='cargo'&&cargoShip&&l.mesh.position.distanceTo(cargoShip.mesh.position)<2.7){
+              game.cargoHealth=Math.max(0,game.cargoHealth-l.damage);cargoShip.health=game.cargoHealth;screenShake=.18;hit=true;
+              explosion(l.mesh.position,0x34d399,16);if(game.cargoHealth<=0){finishAction(false,'Il cargo è stato distrutto');return;}
+            }else if(l.mesh.position.distanceTo(playerShip.position)<1.35){damagePlayer(l.damage);hit=true;}
+            if(hit||l.life<=0){disposeObject(l.mesh);enemyLasers.splice(i,1);}
+          }
+
+          // Laser del giocatore: priorità ai nemici, poi agli asteroidi.
+          for(let i=lasers.length-1;i>=0;i--){
+            const l=lasers[i];l.life-=dt;l.mesh.position.addScaledVector(l.velocity,dt);let hit=false;
+            for(let j=enemies.length-1;j>=0;j--){
+              const e=enemies[j];if(l.mesh.position.distanceTo(e.mesh.position)<e.radius+1){
+                hit=true;e.health-=e.boss?18:26;explosion(l.mesh.position,0x67e8f9,10);
+                if(e.health<=0){
+                  game.enemiesDestroyed++;game.score+=e.boss?1800:280;explosion(e.mesh.position,e.boss?0xff1744:0xfb7185,e.boss?100:48);
+                  if(e.boss)game.bossDestroyed=true;disposeObject(e.mesh);enemies.splice(j,1);
+                }break;
+              }
+            }
+            if(!hit){for(let j=asteroids.length-1;j>=0;j--){const a=asteroids[j];if(l.mesh.position.distanceTo(a.mesh.position)<a.radius+1){hit=true;game.destroyed++;game.score+=120;explosion(a.mesh.position,0xff9f43,40);disposeObject(a.mesh);asteroids.splice(j,1);advanceObjective();break;}}}
+            if(hit||l.life<=0){disposeObject(l.mesh);lasers.splice(i,1);}
+          }
+
+          // Generazione delle ondate e condizioni di vittoria.
+          if(game.mission==='battle'){
+            if(!game.bossSpawned&&game.enemiesDestroyed>=8&&enemies.length===0){game.bossSpawned=true;createEnemy(playerShip.position.clone().add(randomUnit().multiplyScalar(52)),true,'player');toast('☠️ Nave comandante entrata nel settore');}
+            else if(!game.bossSpawned&&enemies.length<2&&game.enemiesDestroyed<8){game.wave++;spawnEnemyWave(Math.min(5,2+game.wave),false,'player',playerShip.position);toast(`⚔️ Ondata ${game.wave}`);}
+            if(game.bossSpawned&&game.bossDestroyed){game.score+=1500+Math.round(game.timer*6);finishAction(true);return;}
+          }else if(game.mission==='defense'){
+            if(enemies.length<3&&game.enemiesDestroyed<18){game.wave++;spawnEnemyWave(3+Math.min(3,game.wave),false,'cargo',cargoShip.mesh.position);toast(`🛡️ Nuova ondata ostile: ${game.wave}`);}
+          }else if(game.mission==='rescue'){
+            if(enemies.length<2&&game.rescued<4)spawnEnemyWave(3,false,'player',scenePositions.moon);
+            if(game.objective===1&&playerShip.position.distanceTo(scenePositions.earth)<Math.max(9,displayedRadius('earth')+5)){game.score+=1300+Math.round(game.timer*5);finishAction(true);return;}
+          }else if(game.objective===2&&playerShip.position.distanceTo(scenePositions.mars)<Math.max(10,displayedRadius('mars')+6)){
+            game.score+=1000+Math.round(game.timer*5);finishAction(true);return;
+          }
+
           for(let i=particleBursts.length-1;i>=0;i--){const p=particleBursts[i];p.life-=dt;const attr=p.points.geometry.attributes.position;for(let j=0;j<p.velocities.length;j++){attr.array[j*3]+=p.velocities[j].x*dt;attr.array[j*3+1]+=p.velocities[j].y*dt;attr.array[j*3+2]+=p.velocities[j].z*dt;p.velocities[j].multiplyScalar(.975);}attr.needsUpdate=true;p.points.material.opacity=Math.max(0,p.life/p.duration);if(p.life<=0){disposeObject(p.points);particleBursts.splice(i,1);}}
-          if(game.objective===2&&playerShip.position.distanceTo(scenePositions.mars)<Math.max(10,displayedRadius('mars')+6)){game.score+=1000+Math.round(game.timer*5);finishAction(true);return;}
           updateActionHud();updateRadar();
         }
 
@@ -2006,10 +2393,16 @@
         });
         document.getElementById('tourBtn').addEventListener('click', () => tourTimer ? stopTour() : startTour());
         document.getElementById('probeBtn').addEventListener('click', launchProbe);
-        document.getElementById('actionBtn').addEventListener('click', () => game.active ? exitAction() : startAction());
+        const missionSelect=document.getElementById('missionSelect');
+        const openMissionSelect=()=>{if(game.active){exitAction();return;}missionSelect.classList.remove('hidden');};
+        const closeMissionSelect=()=>missionSelect.classList.add('hidden');
+        document.getElementById('actionBtn').addEventListener('click', openMissionSelect);
+        document.getElementById('closeMissionSelect').addEventListener('click', closeMissionSelect);
+        missionSelect.addEventListener('pointerdown',e=>{if(e.target===missionSelect)closeMissionSelect();});
+        document.querySelectorAll('.mission-choice').forEach(button=>button.addEventListener('click',()=>startAction(button.dataset.mission)));
         document.getElementById('exitActionBtn').addEventListener('click', () => exitAction());
         document.getElementById('warpBtn').addEventListener('click', useWarp);
-        document.getElementById('restartActionBtn').addEventListener('click', () => { exitAction(false); startAction(); });
+        document.getElementById('restartActionBtn').addEventListener('click', () => { const mission=game.mission; exitAction(false); startAction(mission); });
         document.getElementById('closeResultBtn').addEventListener('click', () => exitAction());
         document.querySelectorAll('.flight-btn').forEach(button => {
           const control = button.dataset.control;
@@ -2071,6 +2464,7 @@
         }
 
         window.addEventListener('keydown', event => {
+          if(event.code==='Escape'&&!missionSelect.classList.contains('hidden')){closeMissionSelect();return;}
           if (game.active) { mapFlightKey(event, true); if (event.code === 'Escape') exitAction(); return; }
           if (event.code === 'Space') { event.preventDefault(); document.getElementById('pauseBtn').click(); }
           if (event.key === '1') focusOn('sun');
