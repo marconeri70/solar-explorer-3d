@@ -641,7 +641,8 @@
     <div id="radarWrap" class="glass" aria-label="Radar mobile e ridimensionabile">
       <div class="radar-title">
         <div id="radarDragHandle" title="Trascina per spostare il radar">
-          <span class="radar-grip-dots">⠿</span><span>RADAR</span><span class="radar-range">150 u</span>
+          <span class="radar-grip-dots">⠿</span><span>RADAR</span>
+          <span id="radarHeading" class="radar-range">ROTTA 000°</span>
         </div>
         <div class="radar-controls">
           <button id="radarMinusBtn" class="radar-control" type="button" title="Riduci radar" aria-label="Riduci radar">−</button>
@@ -1402,6 +1403,7 @@
         const radarMinusBtn = document.getElementById('radarMinusBtn');
         const radarPlusBtn = document.getElementById('radarPlusBtn');
         const radarResetBtn = document.getElementById('radarResetBtn');
+        const radarHeading = document.getElementById('radarHeading');
         const radarCanvas = document.getElementById('radar');
         const radarCtx = radarCanvas.getContext('2d');
         const input = Object.create(null);
@@ -2123,10 +2125,93 @@
           if(cargoShip)draw(cargoShip.mesh.position,'#34d399',6.2);
           draw(game.mission==='rescue'?scenePositions.moon:scenePositions.mars,game.mission==='rescue'?'#e2e8f0':'#f97355',7);
 
-          ctx.translate(cx,cy);ctx.fillStyle='#fff';
-          ctx.shadowColor='#67e8f9';ctx.shadowBlur=7*unit;
-          ctx.beginPath();ctx.moveTo(0,-9*unit);ctx.lineTo(6*unit,7*unit);
-          ctx.lineTo(0,4*unit);ctx.lineTo(-6*unit,7*unit);ctx.closePath();ctx.fill();ctx.restore();
+          // Direzione reale della navicella proiettata sul piano X/Z del radar.
+          const shipForward = new THREE.Vector3(0,0,-1)
+            .applyQuaternion(playerShip.quaternion)
+            .normalize();
+          const horizontalLength = Math.hypot(shipForward.x, shipForward.z);
+          const headingAngle = horizontalLength > .0001
+            ? Math.atan2(shipForward.x, -shipForward.z)
+            : 0;
+          const headingDegrees = (THREE.MathUtils.radToDeg(headingAngle) + 360) % 360;
+          radarHeading.textContent = `ROTTA ${String(Math.round(headingDegrees) % 360).padStart(3,'0')}°`;
+
+          // Linea di previsione: indica chiaramente dove si sta andando.
+          const directionLength = plotRadius * (.33 + Math.min(1, Math.abs(game.speed) / 24) * .42);
+          const dirX = Math.sin(headingAngle);
+          const dirY = -Math.cos(headingAngle);
+          const gradient = ctx.createLinearGradient(
+            cx, cy,
+            cx + dirX * directionLength,
+            cy + dirY * directionLength
+          );
+          gradient.addColorStop(0,'rgba(103,232,249,.92)');
+          gradient.addColorStop(1,'rgba(103,232,249,0)');
+          ctx.strokeStyle = gradient;
+          ctx.lineWidth = Math.max(1.5, 2.4 * unit);
+          ctx.setLineDash([7 * unit, 5 * unit]);
+          ctx.beginPath();
+          ctx.moveTo(cx + dirX * 10 * unit, cy + dirY * 10 * unit);
+          ctx.lineTo(cx + dirX * directionLength, cy + dirY * directionLength);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Piccolo cono di prua.
+          ctx.save();
+          ctx.translate(cx + dirX * directionLength, cy + dirY * directionLength);
+          ctx.rotate(headingAngle);
+          ctx.fillStyle = 'rgba(103,232,249,.72)';
+          ctx.shadowColor = '#67e8f9';
+          ctx.shadowBlur = 8 * unit;
+          ctx.beginPath();
+          ctx.moveTo(0,-5*unit);
+          ctx.lineTo(3.2*unit,3.5*unit);
+          ctx.lineTo(-3.2*unit,3.5*unit);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+
+          // Navicella centrale orientata come il modello 3D.
+          ctx.save();
+          ctx.translate(cx,cy);
+          ctx.rotate(headingAngle);
+
+          // Scia posteriore, più lunga con maggiore velocità.
+          const exhaust = (4 + Math.min(16,Math.abs(game.speed) * .55)) * unit;
+          const exhaustGradient = ctx.createLinearGradient(0,5*unit,0,exhaust+11*unit);
+          exhaustGradient.addColorStop(0,'rgba(34,211,238,.95)');
+          exhaustGradient.addColorStop(1,'rgba(34,211,238,0)');
+          ctx.fillStyle = exhaustGradient;
+          ctx.beginPath();
+          ctx.moveTo(-2.4*unit,5*unit);
+          ctx.lineTo(0,exhaust+11*unit);
+          ctx.lineTo(2.4*unit,5*unit);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.fillStyle='#ffffff';
+          ctx.strokeStyle='#67e8f9';
+          ctx.lineWidth=Math.max(1,1.1*unit);
+          ctx.shadowColor='#67e8f9';
+          ctx.shadowBlur=8*unit;
+          ctx.beginPath();
+          ctx.moveTo(0,-11*unit);       // prua
+          ctx.lineTo(5.3*unit,5.5*unit);
+          ctx.lineTo(2.1*unit,4.2*unit);
+          ctx.lineTo(0,7.2*unit);       // coda
+          ctx.lineTo(-2.1*unit,4.2*unit);
+          ctx.lineTo(-5.3*unit,5.5*unit);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Punto della cabina per distinguere immediatamente la prua.
+          ctx.fillStyle='#22d3ee';
+          ctx.beginPath();
+          ctx.arc(0,-3.2*unit,1.8*unit,0,TWO_PI);
+          ctx.fill();
+          ctx.restore();
+          ctx.restore();
         }
 
         function updateAction(dt) {
